@@ -5,7 +5,7 @@ module.exports = {
   // publicPath:process.env.NODE_ENV === 'production' ? '/vue_workspac/aihuhuproject/' : '/',
 
   //基本路径
-  publicPath: './', //默认的'/'是绝对路径，如果不确定在根路径，改成相对路径'./'
+  publicPath: '/', //history模式需要使用绝对路径
   // 输出文件目录
   outputDir: 'dist',
   assetsDir: 'static',
@@ -32,7 +32,7 @@ module.exports = {
     hotOnly: false, // hot 和 hotOnly 的区别是在某些模块不支持热更新的情况下，前者会自动刷新页面，后者不会刷新页面，而是在控制台输出热更新失败
     proxy: {
       '/api': {
-        target: 'http://property.limetime.cn', //目标接口域名
+        target: 'https://property.limetime.cn', //目标接口域名
         secure: false, //false为http访问，true为https访问
         changeOrigin: true, //是否跨域
         // ws: true,//websocket支持
@@ -41,6 +41,7 @@ module.exports = {
         }
       }
     }, // 设置代理
+    historyApiFallback: true // 解决history模式下刷新页面报错
   },
 
   configureWebpack: {
