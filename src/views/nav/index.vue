@@ -181,7 +181,8 @@ export default {
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
-  /* 适配iOS底部安全区域 */
+  /* 适配iOS底部安全区域，添加constant()作为fallback，兼容微信浏览器 */
+  padding-bottom: calc(60px + constant(safe-area-inset-bottom));
   padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 
