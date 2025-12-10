@@ -1,25 +1,25 @@
 <template>
   <div class="page">
     <!-- 腾讯地图容器 -->
-    <div id="tencent-map" class="tencent-map">
-      <!-- 底部点位信息展示 - 移动到地图容器内部 -->
-      <div v-if="selectedPoint" class="point-info">
-        <div class="info-content">
-          <!-- 左边图片区域 -->
-          <div class="info-image">
-            <img :src="selectedPoint.MainImageUrl" :alt="selectedPoint.name" class="main-image" />
+    <div id="tencent-map" class="tencent-map"></div>
+    
+    <!-- 底部点位信息展示 - 移回页面根容器 -->
+    <div v-if="selectedPoint" class="point-info" @click="handlePointClick(selectedPoint)">
+      <div class="info-content">
+        <!-- 左边图片区域 -->
+        <div class="info-image">
+          <img :src="selectedPoint.MainImageUrl" :alt="selectedPoint.name" class="main-image" />
+        </div>
+        
+        <!-- 右边信息区域 -->
+        <div class="info-text">
+          <div class="property-price">约 <span class="price">{{ selectedPoint.price }}</span> 元/㎡</div>
+          <div class="info-header">
+            <h3>{{ selectedPoint.name }}</h3>
+           
           </div>
-          
-          <!-- 右边信息区域 -->
-          <div class="info-text" @click="handlePointClick(selectedPoint)">
-            <div class="property-price">约 <span class="price">{{ selectedPoint.price }}</span> 元/㎡</div>
-            <div class="info-header">
-              <h3>{{ selectedPoint.name }}</h3>
-             
-            </div>
-            <div class="info-tags">
-              <span v-for="tag in selectedPoint.Tags" :key="tag" class="tag">{{ tag }}</span>
-            </div>
+          <div class="info-tags">
+            <span v-for="tag in selectedPoint.Tags" :key="tag" class="tag">{{ tag }}</span>
           </div>
         </div>
       </div>
@@ -233,8 +233,9 @@ export default {
     
     // 点击点位信息跳转详情页
     handlePointClick(point) {
-      console.log('点击了点位信息:', point);
-      this.$router.push(`/detail/${point.id}`);
+      if (point && point.id) {
+        this.$router.push(`/detail/${point.id}`);
+      }
     },
     
     // 找到离用户最近的标记点并定位
@@ -424,21 +425,23 @@ export default {
   z-index: 1;
 }
 
-/* 底部点位信息样式 - 调整为相对于地图容器定位 */
+/* 底部点位信息样式 - 相对于页面定位 */
 .point-info {
   position: absolute;
-  bottom: 0;
+  /* 适配底部安全区域，与页面padding-bottom保持一致 */
+  bottom: calc(50px + constant(safe-area-inset-bottom));
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   background: rgba(255, 255, 255, 0.98);
   padding: 12px;
-  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.15);
-  z-index: 2000; /* 确保显示在地图所有元素之上，包括腾讯地图logo */
+  z-index: 1000; /* 确保显示在地图和其他元素上方 */
   border-radius: 16px 16px 0 0;
   padding-bottom: 16px;
   /* 限制高度，确保不遮挡底部导航栏 */
   max-height: 100px;
   overflow: hidden;
+  cursor: pointer; /* 显示可点击光标 */
 }
 
 /* 左右布局容器 */
