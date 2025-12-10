@@ -397,13 +397,13 @@ export default {
       // 只有当当前id与要跳转的id不同时，才执行跳转，避免重复导航
       if (currentId !== itemId) {
         // 使用 replace 方法替换当前路由，避免历史记录堆积
-        this.$router.replace(`/detail/${itemId}`);
+        this.$router.replace(`/detail/${itemId}`).then(() => {
+          // 跳转成功后，回到页面顶部
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
       } else {
         // 如果id相同，回到页面顶部
-        window.scrollTo({
-          top: 0,
-          behavior: 'smooth'
-        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     },
     // 检测手机安装了哪些导航应用
@@ -592,10 +592,16 @@ export default {
 <style scoped>
 .page {
   padding-top: 46px;
-  padding-bottom: 60px;
+  /* 基础底部padding，确保内容不会被底部操作栏盖住 */
+  padding-bottom: 80px;
+  /* iOS Safari 10+ (旧版浏览器优先) */
+  padding-bottom: calc(80px + constant(safe-area-inset-bottom));
+  /* iOS Safari 11+ (新版浏览器覆盖旧版) */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
   background-color: #fff;
   position: relative;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 加载状态样式 */
@@ -667,7 +673,6 @@ export default {
   border-radius: 20px;
   font-size: 14px;
   cursor: pointer;
-  z-index: 10;
   transition: all 0.3s ease;
 }
 
