@@ -233,48 +233,105 @@ export default {
     // 保存到相册（移动端）
     saveToAlbum(canvas, imgData) {
       try {
-        // 现代浏览器支持 navigator.clipboard 或 MediaRecorder
-        if (navigator.clipboard && navigator.clipboard.write) {
-          // 尝试使用剪贴板API
-          canvas.toBlob(async (blob) => {
-            try {
-              // eslint-disable-next-line no-undef
-              await navigator.clipboard.write([
-                // eslint-disable-next-line no-undef
-                new ClipboardItem({
-                  'image/png': blob
-                })
-              ]);
+        // 转换为Blob对象
+        canvas.toBlob((blob) => {
+          if (blob) {
+            // 尝试使用iOS的webkitSaveImageToPhotosAlbum API
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.saveImageToPhotosAlbum) {
+              // iOS WKWebView环境
+              window.webkit.messageHandlers.saveImageToPhotosAlbum.postMessage(imgData);
               
               // 恢复原图
               this.restoreImages();
               
               // 保存成功提示
               this.$toast.success({
-                message: '图片已复制到剪贴板，请手动保存到相册',
-                duration: 2000,
+                message: '图片已保存到相册',
+                duration: 1500,
                 onClose: () => {
                   // 关闭弹窗
                   this.visible = false;
                 }
               });
-            } catch (err) {
-              // 剪贴板API失败，回退到传统方法
-              this.fallbackSaveToAlbum(imgData);
+            } else if (navigator.webkitSaveImageToPhotosAlbum) {
+              // iOS Safari环境
+              navigator.webkitSaveImageToPhotosAlbum(imgData, () => {
+                // 恢复原图
+                this.restoreImages();
+                
+                // 保存成功提示
+                this.$toast.success({
+                  message: '图片已保存到相册',
+                  duration: 1500,
+                  onClose: () => {
+                    // 关闭弹窗
+                    this.visible = false;
+                  }
+                });
+              }, (err) => {
+                console.error('iOS保存到相册失败:', err);
+                // 回退到分享API
+                this.shareToAlbum(blob);
+              });
+            } else {
+              // 其他浏览器，尝试使用分享API
+              this.shareToAlbum(blob);
             }
-          });
-        } else {
-          // 不支持剪贴板API，使用传统方法
-          this.fallbackSaveToAlbum(imgData);
-        }
+          } else {
+            this.$toast.fail('保存失败');
+            this.restoreImages();
+          }
+        }, 'image/png');
       } catch (err) {
         console.error('保存到相册失败:', err);
-        // 回退到传统方法
-        this.fallbackSaveToAlbum(imgData);
+        // 回退到基础方法
+        this.basicSaveToAlbum(imgData);
       }
     },
-    // 传统保存到相册方法（兼容旧浏览器）
-    fallbackSaveToAlbum(imgData) {
+    
+    // 使用分享API保存到相册
+    shareToAlbum(blob) {
+      try {
+        // 检查是否支持navigator.share API
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [blob] })) {
+          // 创建File对象
+          const file = new File([blob], `项目详情_${new Date().getTime()}.png`, { type: 'image/png' });
+          
+          // 使用分享API，用户可以选择保存到相册
+          navigator.share({
+            files: [file],
+            title: '项目详情图片',
+          }).then(() => {
+            // 恢复原图
+            this.restoreImages();
+            
+            // 保存成功提示
+            this.$toast.success({
+              message: '图片保存成功',
+              duration: 1500,
+              onClose: () => {
+                // 关闭弹窗
+                this.visible = false;
+              }
+            });
+          }).catch((err) => {
+            console.error('分享API失败:', err);
+            // 回退到基础方法
+            this.basicSaveToAlbum(URL.createObjectURL(blob));
+          });
+        } else {
+          // 不支持分享API，回退到基础方法
+          this.basicSaveToAlbum(URL.createObjectURL(blob));
+        }
+      } catch (err) {
+        console.error('分享API调用失败:', err);
+        // 回退到基础方法
+        this.basicSaveToAlbum(URL.createObjectURL(blob));
+      }
+    },
+    
+    // 基础保存方法（兼容旧浏览器）
+    basicSaveToAlbum(imgData) {
       try {
         // 创建下载链接
         const link = document.createElement('a');
@@ -296,6 +353,10 @@ export default {
         // 清理
         setTimeout(() => {
           document.body.removeChild(link);
+          // 如果是blob URL，释放资源
+          if (imgData.startsWith('blob:')) {
+            URL.revokeObjectURL(imgData);
+          }
         }, 100);
         
         // 恢复原图
@@ -303,15 +364,15 @@ export default {
         
         // 保存成功提示
         this.$toast.success({
-          message: '图片保存成功，请到下载文件夹查看',
-          duration: 1500,
+          message: '图片已保存，请到相册或下载文件夹查看',
+          duration: 2000,
           onClose: () => {
             // 关闭弹窗
             this.visible = false;
           }
         });
       } catch (err) {
-        console.error('传统保存方法失败:', err);
+        console.error('基础保存方法失败:', err);
         
         // 恢复原图
         this.restoreImages();
@@ -619,6 +680,7 @@ export default {
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .qrcode-img {
