@@ -181,16 +181,17 @@ export default {
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
+  /* 适配iOS底部安全区域 */
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 
 /* 腾讯地图容器样式 */
 .tencent-map {
   width: 100%;
-  height: calc(100% - 46px - 50px);
-  position: absolute;
-  top: 46px;
-  left: 0;
-  right: 0;
-  bottom: 50px;
+  /* 调整高度计算，确保地图不会超出页面内容区域 */
+  height: calc(100% - 46px);
+  position: relative;
+  /* 移除绝对定位，改为相对定位，避免层级问题 */
+  z-index: 1;
 }
 </style>
