@@ -165,177 +165,63 @@ export default {
     saveImage() {
       this.$toast.loading({
         message: '保存中...',
-        duration: 0, // 不自动关闭
-        forbidClick: true // 禁止点击
+        duration: 0,
+        forbidClick: true
       });
 
-      // 获取海报容器元素
       const posterContainer = document.querySelector('.poster-container');
       if (!posterContainer) {
         this.$toast.fail('保存失败');
         return;
       }
 
-      // 确保二维码已经生成
-      this.$nextTick(() => {
-        // 使用 html2canvas 将 DOM 转换为 canvas
-        import('html2canvas').then((html2canvas) => {
-          // 直接使用html2canvas处理所有图片，不进行预处理
-          html2canvas.default(posterContainer, {
-            useCORS: true, // 允许跨域图片
-            scale: 2, // 提高图片质量
-            backgroundColor: '#ffffff', // 设置背景色
-            logging: false, // 关闭日志
-            allowTaint: true, // 允许跨域图片污染画布
-            useTransform: true, // 使用CSS变换
-            // 确保所有元素都能正确显示
-            ignoreElements: (element) => {
-              // 只忽略display: none的元素
-              return element.style.display === 'none';
-            },
-            // 确保二维码已生成
-            timeout: 5000, // 增加超时时间
-            // 确保所有图片设置正确的跨域属性
-            onclone: (clonedDoc) => {
-              const images = clonedDoc.querySelectorAll('img');
-              images.forEach(img => {
-                // 处理本地图片路径，确保html2canvas能正确访问
-                if (img.src.includes('@/assets/')) {
-                  // 替换@/assets/为相对路径
-                  const relativePath = img.src.replace('@/assets/', '/src/assets/');
-                  img.src = relativePath;
-                }
-                // 设置跨域属性
-                img.crossOrigin = 'anonymous';
-                // 确保图片有正确的src
-                if (!img.src || img.src === '') {
-                  img.src = img.getAttribute('src') || '';
-                }
-              });
-              
-              // 确保二维码已生成
-              const qrcodeEl = clonedDoc.getElementById('qrcode');
-              if (qrcodeEl && qrcodeEl.innerHTML === '') {
-                // 如果二维码未生成，尝试重新生成
-                new QRCode(qrcodeEl, {
-                  text: `${window.location.origin}${this.$route.path}?id=${this.$route.params.id}`,
-                  width: 60,
-                  height: 60,
-                  colorDark: '#000000',
-                  colorLight: '#ffffff',
-                  correctLevel: QRCode.CorrectLevel.H
+      // 使用 html2canvas 将 DOM 转换为 canvas
+      import('html2canvas').then((html2canvas) => {
+        html2canvas.default(posterContainer, {
+          useCORS: true,
+          scale: 2,
+          backgroundColor: '#ffffff',
+          timeout: 5000
+        }).then((canvas) => {
+          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+          
+          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+            // 微信浏览器使用JSSDK保存到相册
+            window.wx.saveImageToPhotosAlbum({
+              filePath: canvas.toDataURL('image/png'),
+              success: () => {
+                this.$toast.success({
+                  message: '图片已保存到相册',
+                  duration: 1500,
+                  onClose: () => this.visible = false
                 });
+              },
+              fail: () => {
+                this.$toast.fail('保存失败');
+                this.visible = false;
               }
-            }
-          }).then((canvas) => {
-            // 检测是否是微信浏览器
-            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            });
+          } else {
+            // 其他浏览器直接下载
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `项目详情_${new Date().getTime()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
             
-            if (isWechat) {
-              // 微信浏览器：使用JSSDK保存到相册
-              this.saveImageWithWechatJSSDK(canvas);
-            } else {
-              // 其他浏览器：直接下载图片
-              this.downloadImageDirectly(canvas);
-            }
-          }).catch((error) => {
-            console.error('生成图片失败:', error);
-            this.$toast.fail('保存失败');
-          });
-        }).catch((error) => {
-          console.error('加载 html2canvas 失败:', error);
+            this.$toast.success({
+              message: '图片已下载',
+              duration: 1500,
+              onClose: () => this.visible = false
+            });
+          }
+        }).catch(() => {
           this.$toast.fail('保存失败');
         });
-      });
-    },
-    
-    // 微信浏览器使用JSSDK保存到相册
-    saveImageWithWechatJSSDK(canvas) {
-      try {
-        // 转换为DataURL
-        const dataURL = canvas.toDataURL('image/png');
-        
-        // 检查微信JSSDK是否已加载
-        if (window.wx && window.wx.saveImageToPhotosAlbum) {
-          // 使用微信JSSDK保存到相册
-          window.wx.saveImageToPhotosAlbum({
-            filePath: dataURL,
-            success: () => {
-              this.$toast.success({
-                message: '图片已保存到相册',
-                duration: 1500,
-                onClose: () => {
-                  // 关闭弹窗
-                  this.visible = false;
-                }
-              });
-            },
-            fail: (err) => {
-              console.error('微信JSSDK保存失败:', err);
-              // 如果是用户拒绝授权，提示用户
-              if (err.errMsg.indexOf('auth deny') > -1) {
-                this.$toast.fail('请先授权保存到相册');
-              } else {
-                this.$toast.fail('保存失败');
-              }
-              // 关闭弹窗
-              this.visible = false;
-            }
-          });
-        } else {
-          // 微信JSSDK未加载，直接下载图片
-          this.downloadImageDirectly(canvas);
-        }
-      } catch (err) {
-        console.error('微信JSSDK保存异常:', err);
-        // 异常情况下直接下载
-        this.downloadImageDirectly(canvas);
-      }
-    },
-    
-    // 直接下载图片（非微信浏览器）
-    downloadImageDirectly(canvas) {
-      try {
-        // 转换为DataURL
-        const dataURL = canvas.toDataURL('image/png');
-        
-        // 创建下载链接
-        const link = document.createElement('a');
-        link.href = dataURL;
-        link.download = `项目详情_${new Date().getTime()}.png`;
-        
-        // 在移动端触发下载
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        
-        // 使用触摸事件模拟点击，提高移动端兼容性
-        const event = new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          view: window
-        });
-        link.dispatchEvent(event);
-        
-        // 清理
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 100);
-        
-        // 保存成功提示
-        this.$toast.success({
-          message: '图片已下载',
-          duration: 1500,
-          onClose: () => {
-            // 关闭弹窗
-            this.visible = false;
-          }
-        });
-      } catch (err) {
-        console.error('直接下载失败:', err);
+      }).catch(() => {
         this.$toast.fail('保存失败');
-        // 关闭弹窗
-        this.visible = false;
-      }
+      });
     },
     // 关闭弹窗
     onClose() {
