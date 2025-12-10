@@ -221,9 +221,7 @@ export default {
       loading: true,
       // 导航选择弹窗数据
       showNavigationSheet: false,
-      navigationActions: [
-        { name: '浏览器打开', action: 'browser' } // 默认只显示浏览器打开选项
-      ]
+      navigationActions: []
     }
   },
   computed: {
@@ -460,31 +458,18 @@ export default {
     openNavigation() {
       if (!this.info.Address) return;
       
-      // 检测手机安装了哪些导航应用
-      this.detectNavigationApps().then((installedApps) => {
-        // 动态生成导航选项
-        const actions = [];
-        
-        // 添加检测到的导航应用
-        if (installedApps.baidu) {
-          actions.push({ name: '百度地图', action: 'baidu' });
-        }
-        if (installedApps.amap) {
-          actions.push({ name: '高德地图', action: 'amap' });
-        }
-        if (installedApps.tencent) {
-          actions.push({ name: '腾讯地图', action: 'tencent' });
-        }
-        
-        // 始终添加浏览器打开选项
-        actions.push({ name: '浏览器打开', action: 'browser' });
-        
-        // 更新导航选项
-        this.navigationActions = actions;
-        
-        // 显示导航选择菜单
-        this.showNavigationSheet = true;
-      });
+      // 默认显示百度地图、高德地图和腾讯地图，不要浏览器打开
+      const actions = [
+        { name: '百度地图', action: 'baidu' },
+        { name: '高德地图', action: 'amap' },
+        { name: '腾讯地图', action: 'tencent' }
+      ];
+      
+      // 更新导航选项
+      this.navigationActions = actions;
+      
+      // 显示导航选择菜单
+      this.showNavigationSheet = true;
     },
     // 处理导航选择
     onNavigationSelect(action) {
@@ -498,78 +483,69 @@ export default {
       // 获取设备类型
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
       
-      // 尝试打开应用，失败后回退到浏览器
-      const openApp = (appUrl, fallbackUrl) => {
-        // 记录开始时间
-        const startTime = Date.now();
-        
-        // 尝试打开应用
-        window.location.href = appUrl;
-        
-        // 设置定时器，500ms后检查是否成功打开应用
-        setTimeout(() => {
-          // 如果500ms内页面没有隐藏，说明应用打开失败，使用浏览器打开
-          if (Date.now() - startTime < 1200) {
-            window.open(fallbackUrl, '_blank');
-          }
-        }, 500);
+      // 导航app下载地址
+      const downloadUrls = {
+        baidu: {
+          ios: 'https://apps.apple.com/cn/app/百度地图/id452186370',
+          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.baidu.BaiduMap'
+        },
+        amap: {
+          ios: 'https://apps.apple.com/cn/app/高德地图/id461703208',
+          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.autonavi.minimap'
+        },
+        tencent: {
+          ios: 'https://apps.apple.com/cn/app/腾讯地图/id481627301',
+          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.tencent.map'
+        }
+      };
+      
+      // 导航app URL Scheme
+      const appUrls = {
+        baidu: {
+          ios: `baidumap://map/geocoder?address=${encodedAddress}&src=iosapp`,
+          android: `baidumap://map/geocoder?address=${encodedAddress}&src=andr`
+        },
+        amap: {
+          ios: `iosamap://path?sourceApplication=applicationName&name=${encodedAddress}&addr=${encodedAddress}&dev=0`,
+          android: `amapuri://route/plan/?daddr=${encodedAddress}&dev=0&t=0`
+        },
+        tencent: {
+          ios: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`,
+          android: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`
+        }
       };
       
       // 根据选择的导航app执行不同的操作
-      switch (action.action) {
-        case 'baidu':
-          // 百度地图
-          if (isIOS) {
-            // iOS平台
-            openApp(
-              `baidumap://map/geocoder?address=${encodedAddress}&src=iosapp`,
-              `https://api.map.baidu.com/geocoder?address=${encodedAddress}&output=html`
-            );
-          } else {
-            // Android平台
-            openApp(
-              `baidumap://map/geocoder?address=${encodedAddress}&src=andr`,
-              `https://api.map.baidu.com/geocoder?address=${encodedAddress}&output=html`
-            );
-          }
-          break;
-        case 'amap':
-          // 高德地图
-          if (isIOS) {
-            // iOS平台
-            openApp(
-              `iosamap://path?sourceApplication=applicationName&name=${encodedAddress}&addr=${encodedAddress}&dev=0`,
-              `https://uri.amap.com/navigation?to=${encodedAddress}&mode=car`
-            );
-          } else {
-            // Android平台
-            openApp(
-              `amapuri://route/plan/?daddr=${encodedAddress}&dev=0&t=0`,
-              `https://uri.amap.com/navigation?to=${encodedAddress}&mode=car`
-            );
-          }
-          break;
-        case 'tencent':
-          // 腾讯地图
-          if (isIOS) {
-            // iOS平台
-            openApp(
-              `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`,
-              `https://apis.map.qq.com/uri/v1/geocoder?address=${encodedAddress}&coord_type=1`
-            );
-          } else {
-            // Android平台
-            openApp(
-              `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`,
-              `https://apis.map.qq.com/uri/v1/geocoder?address=${encodedAddress}&coord_type=1`
-            );
-          }
-          break;
-        case 'browser':
-          // 浏览器打开
-          window.open(`https://maps.baidu.com/?q=${encodedAddress}`, '_blank');
-          break;
-      }
+      const selectedApp = action.action;
+      const appUrl = isIOS ? appUrls[selectedApp].ios : appUrls[selectedApp].android;
+      const downloadUrl = isIOS ? downloadUrls[selectedApp].ios : downloadUrls[selectedApp].android;
+      
+      // 尝试打开应用
+      window.location.href = appUrl;
+      
+      // 检测页面可见性变化，判断应用是否成功打开
+      let appOpened = false;
+      
+      // 页面隐藏时，表示应用可能已成功打开
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          appOpened = true;
+        }
+      };
+      
+      // 添加可见性变化事件监听
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // 设置定时器，1000ms后检查是否成功打开应用
+      setTimeout(() => {
+        // 移除事件监听
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        
+        // 如果页面没有隐藏，说明应用没有打开，跳转到对应官方的下载网址
+        if (!appOpened) {
+          window.open(downloadUrl, '_blank');
+        }
+      }, 1000);
       
       // 关闭导航选择菜单
       this.showNavigationSheet = false;
