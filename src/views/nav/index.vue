@@ -427,15 +427,18 @@ export default {
 /* 底部点位信息样式 */
 .point-info {
   position: absolute;
-  bottom: 50px; /* 与底部导航栏顶部对齐 */
+  bottom: 0;
   left: 0;
   right: 0;
   background: rgba(255, 255, 255, 0.98);
   padding: 12px;
   box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.15);
-  z-index: 100; /* 确保显示在地图和其他元素上方 */
+  z-index: 99; /* 确保显示在地图上方，但低于底部导航栏 */
   border-radius: 16px 16px 0 0;
   padding-bottom: 16px;
+  /* 确保不被底部导航栏覆盖 */
+  max-height: 120px;
+  overflow: hidden;
 }
 
 /* 左右布局容器 */
