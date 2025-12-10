@@ -174,7 +174,7 @@ export default {
 <style scoped>
 /* 页面样式 */
 .page {
-  padding: 46px 0 60px;
+  padding: 46px 0 50px;
   margin: 0;
   background-color: #fff;
   height: 100vh;
@@ -182,17 +182,16 @@ export default {
   box-sizing: border-box;
   position: relative;
   /* 适配iOS底部安全区域，添加constant()作为fallback，兼容微信浏览器 */
-  padding-bottom: calc(60px + constant(safe-area-inset-bottom));
-  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  padding-bottom: calc(50px + constant(safe-area-inset-bottom));
+  padding-bottom: calc(50px + env(safe-area-inset-bottom));
 }
 
 /* 腾讯地图容器样式 */
 .tencent-map {
   width: 100%;
-  /* 调整高度计算，确保地图不会超出页面内容区域 */
-  height: calc(100% - 46px);
+  /* 调整高度计算，考虑顶部和底部的padding，确保地图填满剩余空间 */
+  height: 100%;
   position: relative;
-  /* 移除绝对定位，改为相对定位，避免层级问题 */
   z-index: 1;
 }
 </style>
