@@ -51,7 +51,7 @@
     <div class="info-section">
       <div class="info-item">
         <div class="info-label">{{info.PropertyType}}</div>
-        <div class="info-value">类型</div>
+        <div class="info-value">业态</div>
       </div>
       <div class="info-item">
         <div class="info-label">{{info.AreaSegment}}</div>
@@ -159,7 +159,7 @@
         <img src="../../assets/img/share.png" alt=""  class="share-icon"/>
       </div>
       <div class="action-item" @click="onView">
-        <span class="action-text">预约看房</span>
+        <span class="action-text">预约看房{{$route.query.id}}</span>
       </div>
       <div class="action-item call" @click="onCall">
         <span class="action-text">电话咨询</span>
@@ -228,6 +228,25 @@ export default {
     // 提取图片 URL 数组，用于预览组件
     workAreaImageUrls() {
       return this.workAreaImages.map(item => item.url);
+    }
+  },
+  watch: {
+    // 监听路由参数变化，当id变化时重新获取数据
+    '$route.params.id'(newId, oldId) {
+      if (newId !== oldId) {
+        // 请求开始，设置loading为true
+        this.loading = true;
+        
+        // 并行执行所有请求，重新获取数据
+        Promise.all([
+          this.getDetailInfo(),
+          this.getPhone(),
+          this.getList()
+        ]).finally(() => {
+          // 所有请求完成后，设置loading为false
+          this.loading = false;
+        });
+      }
     }
   },
   mounted() {
@@ -378,11 +397,12 @@ export default {
       // 只有当当前id与要跳转的id不同时，才执行跳转，避免重复导航
       if (currentId !== itemId) {
         // 使用 replace 方法替换当前路由，避免历史记录堆积
-        this.$router.replace({
-          path: '/detail',
-          params: {
-            id: itemId
-          }
+        this.$router.replace(`/detail/${itemId}`);
+      } else {
+        // 如果id相同，回到页面顶部
+        window.scrollTo({
+          top: 0,
+          behavior: 'smooth'
         });
       }
     },
