@@ -152,6 +152,26 @@ export default {
       });
     },
     
+    // 将图片URL转换为Base64
+    convertToBase64(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => {
+          resolve(url);
+        };
+        img.src = url;
+      });
+    },
+    
     // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
     saveImage() {
       this.$toast.loading({
@@ -166,15 +186,46 @@ export default {
         return;
       }
 
-      // 使用html2canvas保存图片
+      // 只处理海报主图（.poster-img）
+      const mainImg = posterContainer.querySelector('.poster-img');
+      const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+      
+      // 保存原始src
+      const originalSrc = mainImg ? mainImg.src : '';
+      
+      // 微信浏览器：将海报主图转换为Base64
+      if (isWechat && mainImg && mainImg.src) {
+        this.convertToBase64(mainImg.src).then((base64) => {
+          // 设置主图src为Base64
+          mainImg.src = base64;
+          
+          // 使用html2canvas保存图片
+          this.captureImage(posterContainer, mainImg, originalSrc);
+        }).catch(() => {
+          // 转换失败直接保存
+          this.captureImage(posterContainer, mainImg, originalSrc);
+        });
+      } else {
+        // 其他浏览器直接保存
+        this.captureImage(posterContainer, mainImg, originalSrc);
+      }
+    },
+    
+    // 捕获图片
+    captureImage(container, mainImg, originalSrc) {
       import('html2canvas').then((html2canvas) => {
-        html2canvas.default(posterContainer, {
+        html2canvas.default(container, {
           useCORS: true,
           allowTaint: true,
           scale: 2,
           backgroundColor: '#ffffff',
           timeout: 5000
         }).then((canvas) => {
+          // 恢复主图原始src
+          if (mainImg && originalSrc) {
+            mainImg.src = originalSrc;
+          }
+          
           const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
           if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
@@ -219,6 +270,10 @@ export default {
             });
           }
         }).catch(() => {
+          // 恢复主图原始src
+          if (mainImg && originalSrc) {
+            mainImg.src = originalSrc;
+          }
           this.$toast.fail('保存失败');
         });
       }).catch(() => {
