@@ -433,11 +433,11 @@ export default {
   background: rgba(255, 255, 255, 0.98);
   padding: 12px;
   box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.15);
-  z-index: 99; /* 确保显示在地图上方，但低于底部导航栏 */
+  z-index: 9; /* 降低层级，确保显示在底部导航栏下方 */
   border-radius: 16px 16px 0 0;
   padding-bottom: 16px;
-  /* 确保不被底部导航栏覆盖 */
-  max-height: 120px;
+  /* 限制高度，确保不遮挡底部导航栏 */
+  max-height: 100px;
   overflow: hidden;
 }
 
