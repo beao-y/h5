@@ -523,36 +523,44 @@ export default {
       const appUrl = isIOS ? appUrls[selectedApp].ios : appUrls[selectedApp].android;
       const downloadUrl = isIOS ? downloadUrls[selectedApp].ios : downloadUrls[selectedApp].android;
       
+      // 检测当前浏览器是否支持visibilitychange事件
+      const supportsVisibilityChange = typeof document.hidden !== 'undefined';
+      
       // 尝试打开应用
       window.location.href = appUrl;
       
-      // 记录开始时间
-      const startTime = Date.now();
-      
-      // 检测页面可见性变化，判断应用是否成功打开
-      let appOpened = false;
-      
-      // 页面隐藏时，表示应用可能已成功打开
-      const handleVisibilityChange = () => {
-        if (document.hidden) {
-          appOpened = true;
-        }
-      };
-      
-      // 添加可见性变化事件监听
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      // 设置定时器，2000ms后检查是否成功打开应用（增加延迟时间，确保应用有足够时间打开）
-      setTimeout(() => {
-        // 移除事件监听
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // 仅在支持visibilitychange事件的浏览器中执行检测逻辑
+      if (supportsVisibilityChange) {
+        // 检测页面可见性变化，判断应用是否成功打开
+        let appOpened = false;
         
-        // 如果页面没有隐藏，且时间差大于1500ms（避免误判），说明应用没有打开，跳转到对应官方的下载网址
-        if (!appOpened && Date.now() - startTime > 1500) {
-          // 使用window.location.href替代window.open，避免被弹出窗口阻止
-          window.location.href = downloadUrl;
-        }
-      }, 2000);
+        // 页面隐藏时，表示应用可能已成功打开
+        const handleVisibilityChange = () => {
+          if (document.hidden) {
+            appOpened = true;
+          }
+        };
+        
+        // 添加可见性变化事件监听
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // 设置定时器，2000ms后检查是否成功打开应用
+        setTimeout(() => {
+          // 移除事件监听
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          
+          // 如果页面没有隐藏，说明应用没有打开，跳转到对应官方的下载网址
+          if (!appOpened) {
+            // 使用setTimeout再次延迟，确保应用有足够时间打开
+            setTimeout(() => {
+              // 再次检查页面是否隐藏
+              if (!document.hidden) {
+                window.location.href = downloadUrl;
+              }
+            }, 500);
+          }
+        }, 2000);
+      }
       
       // 关闭导航选择菜单
       this.showNavigationSheet = false;
