@@ -166,44 +166,9 @@ export default {
     generateVideoCovers() {
       this.videos.forEach((video, index) => {
         if (video.isVideo) {
-          // 创建video元素用于生成第一帧
-          const videoEl = document.createElement('video');
-          videoEl.preload = 'metadata';
-          videoEl.crossOrigin = 'anonymous';
-          videoEl.src = video.url;
-          
-          videoEl.addEventListener('loadedmetadata', () => {
-            // 视频加载元数据后，设置.currentTime = 0.1，然后获取第一帧
-            videoEl.currentTime = 0.1;
-            
-            videoEl.addEventListener('seeked', () => {
-              // 创建canvas元素
-              const canvas = document.createElement('canvas');
-              canvas.width = videoEl.videoWidth;
-              canvas.height = videoEl.videoHeight;
-              
-              // 绘制第一帧到canvas
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-              
-              // 将canvas转换为base64图片
-              const cover = canvas.toDataURL('image/png');
-              
-              // 更新视频封面
-              this.videos[index].cover = cover;
-              
-              // 清理资源
-              videoEl.remove();
-              canvas.remove();
-            });
-          });
-          
-          videoEl.addEventListener('error', () => {
-            console.error('视频加载失败:', video.url);
-            // 加载失败时使用默认封面
-            video.cover = '';
-            videoEl.remove();
-          });
+          // 微信浏览器特殊处理：直接使用视频URL作为封面，让浏览器自动处理
+          // 或者使用默认封面
+          this.videos[index].cover = video.url;
         }
       });
     },
