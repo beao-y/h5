@@ -526,6 +526,9 @@ export default {
       // 尝试打开应用
       window.location.href = appUrl;
       
+      // 记录开始时间
+      const startTime = Date.now();
+      
       // 检测页面可见性变化，判断应用是否成功打开
       let appOpened = false;
       
@@ -539,17 +542,17 @@ export default {
       // 添加可见性变化事件监听
       document.addEventListener('visibilitychange', handleVisibilityChange);
       
-      // 设置定时器，1000ms后检查是否成功打开应用
+      // 设置定时器，2000ms后检查是否成功打开应用（增加延迟时间，确保应用有足够时间打开）
       setTimeout(() => {
         // 移除事件监听
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         
-        // 如果页面没有隐藏，说明应用没有打开，跳转到对应官方的下载网址
-        if (!appOpened) {
+        // 如果页面没有隐藏，且时间差大于1500ms（避免误判），说明应用没有打开，跳转到对应官方的下载网址
+        if (!appOpened && Date.now() - startTime > 1500) {
           // 使用window.location.href替代window.open，避免被弹出窗口阻止
           window.location.href = downloadUrl;
         }
-      }, 1000);
+      }, 2000);
       
       // 关闭导航选择菜单
       this.showNavigationSheet = false;
