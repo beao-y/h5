@@ -483,35 +483,38 @@ export default {
       // 获取设备类型
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
       
-      // 导航app下载地址
+      // 导航app下载地址（官方网站下载页面，浏览器访问后会跳转至对应应用商店）
       const downloadUrls = {
         baidu: {
-          ios: 'https://apps.apple.com/cn/app/百度地图/id452186370',
-          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.baidu.BaiduMap'
+          ios: 'https://map.baidu.com/mobile/webapp/index/index/#/index',
+          android: 'https://map.baidu.com/mobile/webapp/index/index/#/index'
         },
         amap: {
-          ios: 'https://apps.apple.com/cn/app/高德地图/id461703208',
-          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.autonavi.minimap'
+          ios: 'https://www.amap.com/download/',
+          android: 'https://www.amap.com/download/'
         },
         tencent: {
-          ios: 'https://apps.apple.com/cn/app/腾讯地图/id481627301',
-          android: 'https://a.app.qq.com/o/simple.jsp?pkgname=com.tencent.map'
+          ios: 'https://map.qq.com/download.html',
+          android: 'https://map.qq.com/download.html'
         }
       };
       
-      // 导航app URL Scheme
+      // 导航app URL Scheme（使用正确的导航接口和参数格式）
       const appUrls = {
         baidu: {
-          ios: `baidumap://map/geocoder?address=${encodedAddress}&src=iosapp`,
-          android: `baidumap://map/geocoder?address=${encodedAddress}&src=andr`
+          // 百度地图导航接口，使用direction接口实现从当前位置到目标地址的导航
+          ios: `baidumap://map/direction?origin=我的位置&destination=name:${encodedAddress}|addr:${encodedAddress}&mode=driving&src=iosapp`,
+          android: `baidumap://map/direction?origin=我的位置&destination=name:${encodedAddress}|addr:${encodedAddress}&mode=driving&src=andr`
         },
         amap: {
-          ios: `iosamap://path?sourceApplication=applicationName&name=${encodedAddress}&addr=${encodedAddress}&dev=0`,
-          android: `amapuri://route/plan/?daddr=${encodedAddress}&dev=0&t=0`
+          // 高德地图导航接口，统一使用正确的导航参数格式
+          ios: `iosamap://navi?sourceApplication=applicationName&backScheme=yourScheme&poiname=${encodedAddress}&poiid=BGVIS&latlon=&dev=0&style=2`,
+          android: `amapuri://route/plan/?sourceApplication=applicationName&dname=${encodedAddress}&dlat=&dlon=&dev=0&t=0`
         },
         tencent: {
-          ios: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`,
-          android: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive&coord_type=1&policy=0`
+          // 腾讯地图导航接口，优化参数格式
+          ios: `qqmap://map/routeplan?from=我的位置&fromcoord=&to=${encodedAddress}&tocoord=&type=drive&policy=0&referer=yourReferer`,
+          android: `qqmap://map/routeplan?from=我的位置&fromcoord=&to=${encodedAddress}&tocoord=&type=drive&policy=0&referer=yourReferer`
         }
       };
       
