@@ -1,6 +1,7 @@
 // import Cookies from 'js-cookie'
 import Vue from 'vue'
 import Router from 'vue-router'
+const VueRouter = Router
 
 Vue.use(Router)
 
@@ -55,7 +56,7 @@ const routes = [
     ]
   },
   {
-    path: '/detail',
+    path: '/detail/:id',
     name: 'Detail',
     component: () => import('@/views/detail/index.vue'),
     meta: {
@@ -77,6 +78,25 @@ const router = new Router({
   mode: 'history',
   routes
 })
+
+// 优化push和replace方法，避免重复导航报错
+const originalPush = VueRouter.prototype.push;
+const originalReplace = VueRouter.prototype.replace;
+
+VueRouter.prototype.push = function push(location, onResolve, onReject) {
+  if (onResolve || onReject) {
+    return originalPush.call(this, location, onResolve, onReject)
+  }
+  return originalPush.call(this, location).catch(err => err)
+}
+
+VueRouter.prototype.replace = function replace(location, onResolve, onReject) {
+  if (onResolve || onReject) {
+    return originalReplace.call(this, location, onResolve, onReject)
+  }
+  return originalReplace.call(this, location).catch(err => err)
+}
+
 
 router.beforeEach((to, from, next) => {
   // 页面滚动到顶部
