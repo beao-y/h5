@@ -175,52 +175,69 @@ export default {
         return;
       }
 
-      // 使用 html2canvas 将 DOM 转换为 canvas
-      import('html2canvas').then((html2canvas) => {
-        html2canvas.default(posterContainer, {
-          useCORS: true,
-          scale: 2,
-          backgroundColor: '#ffffff',
-          timeout: 5000
-        }).then((canvas) => {
-          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-          
-          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-            // 微信浏览器使用JSSDK保存到相册
-            window.wx.saveImageToPhotosAlbum({
-              filePath: canvas.toDataURL('image/png'),
-              success: () => {
-                this.$toast.success({
-                  message: '图片已保存到相册',
-                  duration: 1500,
-                  onClose: () => this.visible = false
-                });
-              },
-              fail: () => {
-                this.$toast.fail('保存失败');
-                this.visible = false;
-              }
-            });
+      // 预加载所有图片，确保图片加载完成后再调用html2canvas
+      const images = posterContainer.querySelectorAll('img');
+      const imagePromises = Array.from(images).map(img => {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
           } else {
-            // 其他浏览器直接下载
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
-            link.download = `项目详情_${new Date().getTime()}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            this.$toast.success({
-              message: '图片已下载',
-              duration: 1500,
-              onClose: () => this.visible = false
-            });
+            img.onload = resolve;
+            img.onerror = resolve; // 即使加载失败也继续
           }
+        });
+      });
+
+      // 等待所有图片加载完成
+      Promise.all(imagePromises).then(() => {
+        // 使用 html2canvas 将 DOM 转换为 canvas
+        import('html2canvas').then((html2canvas) => {
+          html2canvas.default(posterContainer, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            backgroundColor: '#ffffff',
+            timeout: 5000
+          }).then((canvas) => {
+            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            
+            if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+              // 微信浏览器使用JSSDK保存到相册
+              window.wx.saveImageToPhotosAlbum({
+                filePath: canvas.toDataURL('image/png'),
+                success: () => {
+                  this.$toast.success({
+                    message: '图片已保存到相册',
+                    duration: 1500,
+                    onClose: () => this.visible = false
+                  });
+                },
+                fail: () => {
+                  this.$toast.fail('保存失败');
+                  this.visible = false;
+                }
+              });
+            } else {
+              // 其他浏览器直接下载
+              const link = document.createElement('a');
+              link.href = canvas.toDataURL('image/png');
+              link.download = `项目详情_${new Date().getTime()}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              this.$toast.success({
+                message: '图片已下载',
+                duration: 1500,
+                onClose: () => this.visible = false
+              });
+            }
+          }).catch(() => {
+            this.$toast.fail('保存失败');
+          });
         }).catch(() => {
           this.$toast.fail('保存失败');
         });
-      }).catch(() => {
-        this.$toast.fail('保存失败');
       });
     },
     // 关闭弹窗
