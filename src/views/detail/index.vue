@@ -519,22 +519,27 @@ export default {
         }
       };
       
-      // 导航app URL Scheme（使用简化可靠的格式，确保地址能正确代入导航输入框）
+      // 获取经纬度
+      const lat = this.info.Clat || '';
+      const lng = this.info.Clng || '';
+      const latLng = `${lat},${lng}`;
+      
+      // 导航app URL Scheme（添加经纬度参数，让app能直接导航）
       const appUrls = {
         baidu: {
-          // 百度地图导航接口，使用简化的destination参数
-          ios: `baidumap://map/direction?origin=我的位置&destination=${encodedAddress}&mode=driving&src=iosapp`,
-          android: `baidumap://map/direction?origin=我的位置&destination=${encodedAddress}&mode=driving&src=andr`
+          // 百度地图导航接口，添加经纬度参数
+          ios: `baidumap://map/direction?origin=我的位置&destination=${latLng}|${encodedAddress}&mode=driving&src=iosapp`,
+          android: `baidumap://map/direction?origin=我的位置&destination=${latLng}|${encodedAddress}&mode=driving&src=andr`
         },
         amap: {
-          // 高德地图导航接口，确保poiname和dname参数正确
-          ios: `iosamap://navi?poiname=${encodedAddress}&dev=0`,
-          android: `amapuri://route/plan/?dname=${encodedAddress}&dev=0&t=0`
+          // 高德地图导航接口，添加经纬度参数
+          ios: `iosamap://navi?poiname=${encodedAddress}&lat=${lat}&lon=${lng}&dev=0&style=2`,
+          android: `amapuri://route/plan/?dname=${encodedAddress}&dlat=${lat}&dlon=${lng}&dev=0&t=0`
         },
         tencent: {
-          // 腾讯地图导航接口，确保to参数正确
-          ios: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive`,
-          android: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive`
+          // 腾讯地图导航接口，添加经纬度参数
+          ios: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&tocoord=${latLng}&type=drive`,
+          android: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&tocoord=${latLng}&type=drive`
         }
       };
       
