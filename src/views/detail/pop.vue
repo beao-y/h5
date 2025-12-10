@@ -175,97 +175,80 @@ export default {
         return;
       }
 
-      // 克隆容器，避免影响原始DOM
-      const cloneContainer = posterContainer.cloneNode(true);
-      
-      // 处理克隆容器中的图片，确保在微信浏览器中能正确显示
-      const images = cloneContainer.querySelectorAll('img');
-      images.forEach(img => {
-        // 确保图片有src属性
-        if (!img.src || img.src === '') {
-          img.src = '@/assets/img/home1.png';
-        }
-        
-        // 微信浏览器特殊处理：重新设置图片src，确保图片加载
-        const tempSrc = img.src;
-        img.src = '';
-        img.src = tempSrc;
-        
-        // 设置样式确保cover效果
-        img.style.objectFit = 'cover';
-        img.style.width = '100%';
-        img.style.height = '100%';
-      });
-      
-      // 将克隆容器添加到DOM中（临时）
-      cloneContainer.style.position = 'absolute';
-      cloneContainer.style.top = '-9999px';
-      cloneContainer.style.left = '-9999px';
-      document.body.appendChild(cloneContainer);
-      
-      // 使用 html2canvas 将克隆的DOM转换为 canvas
-      import('html2canvas').then((html2canvas) => {
-        html2canvas.default(cloneContainer, {
-          useCORS: true,
-          allowTaint: true,
-          scale: 2,
-          backgroundColor: '#ffffff',
-          timeout: 5000,
-          // 确保图片使用cover样式
-          onclone: (clonedDoc) => {
-            const clonedImages = clonedDoc.querySelectorAll('img');
-            clonedImages.forEach(img => {
-              img.style.objectFit = 'cover';
-              img.style.width = '100%';
-              img.style.height = '100%';
-            });
-          }
-        }).then((canvas) => {
-          // 移除临时克隆容器
-          document.body.removeChild(cloneContainer);
-          
-          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-          
-          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-            // 微信浏览器使用JSSDK保存到相册
-            window.wx.saveImageToPhotosAlbum({
-              filePath: canvas.toDataURL('image/png'),
-              success: () => {
-                this.$toast.success({
-                  message: '图片已保存到相册',
-                  duration: 1500,
-                  onClose: () => this.visible = false
-                });
-              },
-              fail: () => {
-                this.$toast.fail('保存失败');
-                this.visible = false;
-              }
-            });
+      // 预加载所有图片，确保图片加载完成后再调用html2canvas
+      const images = posterContainer.querySelectorAll('img');
+      const imagePromises = Array.from(images).map(img => {
+        return new Promise((resolve) => {
+          if (img.complete) {
+            resolve();
           } else {
-            // 其他浏览器直接下载
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
-            link.download = `项目详情_${new Date().getTime()}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            this.$toast.success({
-              message: '图片已下载',
-              duration: 1500,
-              onClose: () => this.visible = false
-            });
+            img.onload = resolve;
+            img.onerror = resolve; // 即使加载失败也继续
           }
+        });
+      });
+
+      // 等待所有图片加载完成
+      Promise.all(imagePromises).then(() => {
+        // 使用 html2canvas 将 DOM 转换为 canvas
+        import('html2canvas').then((html2canvas) => {
+          html2canvas.default(posterContainer, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            backgroundColor: '#ffffff',
+            timeout: 5000
+          }).then((canvas) => {
+            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            
+            if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+              // 微信浏览器使用JSSDK保存到相册
+              // 将canvas转换为blob，然后使用JSSDK保存
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const url = URL.createObjectURL(blob);
+                  window.wx.saveImageToPhotosAlbum({
+                    filePath: url,
+                    success: () => {
+                      URL.revokeObjectURL(url);
+                      this.$toast.success({
+                        message: '图片已保存到相册',
+                        duration: 1500,
+                        onClose: () => this.visible = false
+                      });
+                    },
+                    fail: () => {
+                      URL.revokeObjectURL(url);
+                      this.$toast.fail('保存失败');
+                      this.visible = false;
+                    }
+                  });
+                } else {
+                  this.$toast.fail('保存失败');
+                  this.visible = false;
+                }
+              }, 'image/png');
+            } else {
+              // 其他浏览器直接下载
+              const link = document.createElement('a');
+              link.href = canvas.toDataURL('image/png');
+              link.download = `项目详情_${new Date().getTime()}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              this.$toast.success({
+                message: '图片已下载',
+                duration: 1500,
+                onClose: () => this.visible = false
+              });
+            }
+          }).catch(() => {
+            this.$toast.fail('保存失败');
+          });
         }).catch(() => {
-          // 移除临时克隆容器
-          document.body.removeChild(cloneContainer);
           this.$toast.fail('保存失败');
         });
-      }).catch(() => {
-        // 移除临时克隆容器
-        document.body.removeChild(cloneContainer);
-        this.$toast.fail('保存失败');
       });
     },
     // 关闭弹窗
@@ -348,10 +331,8 @@ export default {
 .poster-img {
   width: 100%;
   height: 100%;
-  object-fit: cover !important;
+  object-fit: cover;
   border-radius: 8px;
-  display: block;
-  background-color: #f0f0f0;
 }
 
 /* 价格信息 */
