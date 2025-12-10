@@ -166,66 +166,12 @@ export default {
         return;
       }
 
-      // 使用html2canvas保存图片
-      import('html2canvas').then((html2canvas) => {
-        html2canvas.default(posterContainer, {
-          useCORS: true,
-          allowTaint: true,
-          scale: 2,
+      // 使用html-to-image保存图片（替代html2canvas）
+      import('html-to-image').then((htmlToImage) => {
+        htmlToImage.toCanvas(posterContainer, {
+          pixelRatio: 2,
           backgroundColor: '#ffffff',
-          timeout: 5000,
-          // 最有效的海报主图处理方法：在onclone中直接绘制主图
-          onclone: (clonedDoc) => {
-            const clonedMainImg = clonedDoc.querySelector('.poster-img');
-            if (clonedMainImg && clonedMainImg.src) {
-              // 获取主图父容器
-              const imgWrapper = clonedMainImg.parentElement;
-              if (imgWrapper) {
-                // 创建canvas元素替换主图
-                const canvas = clonedDoc.createElement('canvas');
-                canvas.width = imgWrapper.offsetWidth;
-                canvas.height = imgWrapper.offsetHeight;
-                canvas.style.width = '100%';
-                canvas.style.height = '100%';
-                canvas.style.objectFit = 'cover';
-                
-                // 绘制主图，确保cover效果
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => {
-                  // 计算cover效果的绘制区域
-                  const imgRatio = img.width / img.height;
-                  const wrapperRatio = canvas.width / canvas.height;
-                  
-                  let drawWidth, drawHeight, offsetX, offsetY;
-                  if (imgRatio > wrapperRatio) {
-                    drawWidth = canvas.width;
-                    drawHeight = img.height * (canvas.width / img.width);
-                    offsetX = 0;
-                    offsetY = (canvas.height - drawHeight) / 2;
-                  } else {
-                    drawHeight = canvas.height;
-                    drawWidth = img.width * (canvas.height / img.height);
-                    offsetX = (canvas.width - drawWidth) / 2;
-                    offsetY = 0;
-                  }
-                  
-                  // 绘制cover效果的主图
-                  ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-                };
-                img.onerror = () => {
-                  // 加载失败时绘制灰色背景
-                  ctx.fillStyle = '#f0f0f0';
-                  ctx.fillRect(0, 0, canvas.width, canvas.height);
-                };
-                img.src = clonedMainImg.src;
-                
-                // 替换主图为canvas
-                imgWrapper.replaceChild(canvas, clonedMainImg);
-              }
-            }
-          }
+          crossorigin: 'anonymous'
         }).then((canvas) => {
           const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
