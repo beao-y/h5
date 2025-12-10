@@ -154,12 +154,7 @@ export default {
     // 点击楼盘项
     handleClick(item) {
       // 跳转详情页
-      this.$router.push({
-        name: 'Detail',
-        params: {
-          id: item.Id
-        }
-      });
+      this.$router.push(`/detail/${item.Id}`);
     }
   }
 };
