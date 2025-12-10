@@ -499,22 +499,22 @@ export default {
         }
       };
       
-      // 导航app URL Scheme（使用正确的导航接口和参数格式）
+      // 导航app URL Scheme（使用简化可靠的格式，确保地址能正确代入导航输入框）
       const appUrls = {
         baidu: {
-          // 百度地图导航接口，使用direction接口实现从当前位置到目标地址的导航
-          ios: `baidumap://map/direction?origin=我的位置&destination=name:${encodedAddress}|addr:${encodedAddress}&mode=driving&src=iosapp`,
-          android: `baidumap://map/direction?origin=我的位置&destination=name:${encodedAddress}|addr:${encodedAddress}&mode=driving&src=andr`
+          // 百度地图导航接口，使用简化的destination参数
+          ios: `baidumap://map/direction?origin=我的位置&destination=${encodedAddress}&mode=driving&src=iosapp`,
+          android: `baidumap://map/direction?origin=我的位置&destination=${encodedAddress}&mode=driving&src=andr`
         },
         amap: {
-          // 高德地图导航接口，统一使用正确的导航参数格式
-          ios: `iosamap://navi?sourceApplication=applicationName&backScheme=yourScheme&poiname=${encodedAddress}&poiid=BGVIS&latlon=&dev=0&style=2`,
-          android: `amapuri://route/plan/?sourceApplication=applicationName&dname=${encodedAddress}&dlat=&dlon=&dev=0&t=0`
+          // 高德地图导航接口，确保poiname和dname参数正确
+          ios: `iosamap://navi?poiname=${encodedAddress}&dev=0`,
+          android: `amapuri://route/plan/?dname=${encodedAddress}&dev=0&t=0`
         },
         tencent: {
-          // 腾讯地图导航接口，优化参数格式
-          ios: `qqmap://map/routeplan?from=我的位置&fromcoord=&to=${encodedAddress}&tocoord=&type=drive&policy=0&referer=yourReferer`,
-          android: `qqmap://map/routeplan?from=我的位置&fromcoord=&to=${encodedAddress}&tocoord=&type=drive&policy=0&referer=yourReferer`
+          // 腾讯地图导航接口，确保to参数正确
+          ios: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive`,
+          android: `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&type=drive`
         }
       };
       
@@ -546,7 +546,8 @@ export default {
         
         // 如果页面没有隐藏，说明应用没有打开，跳转到对应官方的下载网址
         if (!appOpened) {
-          window.open(downloadUrl, '_blank');
+          // 使用window.location.href替代window.open，避免被弹出窗口阻止
+          window.location.href = downloadUrl;
         }
       }, 1000);
       
