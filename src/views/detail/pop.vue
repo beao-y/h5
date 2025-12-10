@@ -168,43 +168,40 @@ export default {
 
       // 使用html-to-image保存图片（替代html2canvas）
       import('html-to-image').then((htmlToImage) => {
-        htmlToImage.toCanvas(posterContainer, {
+        // 先处理所有图片，确保跨域属性设置正确
+        const images = posterContainer.querySelectorAll('img');
+        images.forEach(img => {
+          img.crossOrigin = 'anonymous';
+        });
+        
+        // 使用html-to-image的toPng方法，更好的跨域支持
+        htmlToImage.toPng(posterContainer, {
           pixelRatio: 2,
           backgroundColor: '#ffffff',
           crossorigin: 'anonymous'
-        }).then((canvas) => {
+        }).then((dataUrl) => {
           const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
           if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
             // 微信浏览器使用JSSDK保存到相册
-            canvas.toBlob((blob) => {
-              if (blob) {
-                const url = URL.createObjectURL(blob);
-                window.wx.saveImageToPhotosAlbum({
-                  filePath: url,
-                  success: () => {
-                    URL.revokeObjectURL(url);
-                    this.$toast.success({
-                      message: '图片已保存到相册',
-                      duration: 1500,
-                      onClose: () => this.visible = false
-                    });
-                  },
-                  fail: () => {
-                    URL.revokeObjectURL(url);
-                    this.$toast.fail('保存失败');
-                    this.visible = false;
-                  }
+            window.wx.saveImageToPhotosAlbum({
+              filePath: dataUrl,
+              success: () => {
+                this.$toast.success({
+                  message: '图片已保存到相册',
+                  duration: 1500,
+                  onClose: () => this.visible = false
                 });
-              } else {
+              },
+              fail: () => {
                 this.$toast.fail('保存失败');
                 this.visible = false;
               }
-            }, 'image/png');
+            });
           } else {
             // 其他浏览器直接下载
             const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
+            link.href = dataUrl;
             link.download = `项目详情_${new Date().getTime()}.png`;
             document.body.appendChild(link);
             link.click();
