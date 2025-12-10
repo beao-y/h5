@@ -152,26 +152,6 @@ export default {
       });
     },
     
-    // 将图片URL转换为Base64
-    convertToBase64(url) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => {
-          resolve(url);
-        };
-        img.src = url;
-      });
-    },
-    
     // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
     saveImage() {
       this.$toast.loading({
@@ -186,46 +166,67 @@ export default {
         return;
       }
 
-      // 只处理海报主图（.poster-img）
-      const mainImg = posterContainer.querySelector('.poster-img');
-      const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-      
-      // 保存原始src
-      const originalSrc = mainImg ? mainImg.src : '';
-      
-      // 微信浏览器：将海报主图转换为Base64
-      if (isWechat && mainImg && mainImg.src) {
-        this.convertToBase64(mainImg.src).then((base64) => {
-          // 设置主图src为Base64
-          mainImg.src = base64;
-          
-          // 使用html2canvas保存图片
-          this.captureImage(posterContainer, mainImg, originalSrc);
-        }).catch(() => {
-          // 转换失败直接保存
-          this.captureImage(posterContainer, mainImg, originalSrc);
-        });
-      } else {
-        // 其他浏览器直接保存
-        this.captureImage(posterContainer, mainImg, originalSrc);
-      }
-    },
-    
-    // 捕获图片
-    captureImage(container, mainImg, originalSrc) {
+      // 使用html2canvas保存图片
       import('html2canvas').then((html2canvas) => {
-        html2canvas.default(container, {
+        html2canvas.default(posterContainer, {
           useCORS: true,
           allowTaint: true,
           scale: 2,
           backgroundColor: '#ffffff',
-          timeout: 5000
-        }).then((canvas) => {
-          // 恢复主图原始src
-          if (mainImg && originalSrc) {
-            mainImg.src = originalSrc;
+          timeout: 5000,
+          // 最有效的海报主图处理方法：在onclone中直接绘制主图
+          onclone: (clonedDoc) => {
+            const clonedMainImg = clonedDoc.querySelector('.poster-img');
+            if (clonedMainImg && clonedMainImg.src) {
+              // 获取主图父容器
+              const imgWrapper = clonedMainImg.parentElement;
+              if (imgWrapper) {
+                // 创建canvas元素替换主图
+                const canvas = clonedDoc.createElement('canvas');
+                canvas.width = imgWrapper.offsetWidth;
+                canvas.height = imgWrapper.offsetHeight;
+                canvas.style.width = '100%';
+                canvas.style.height = '100%';
+                canvas.style.objectFit = 'cover';
+                
+                // 绘制主图，确保cover效果
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                  // 计算cover效果的绘制区域
+                  const imgRatio = img.width / img.height;
+                  const wrapperRatio = canvas.width / canvas.height;
+                  
+                  let drawWidth, drawHeight, offsetX, offsetY;
+                  if (imgRatio > wrapperRatio) {
+                    drawWidth = canvas.width;
+                    drawHeight = img.height * (canvas.width / img.width);
+                    offsetX = 0;
+                    offsetY = (canvas.height - drawHeight) / 2;
+                  } else {
+                    drawHeight = canvas.height;
+                    drawWidth = img.width * (canvas.height / img.height);
+                    offsetX = (canvas.width - drawWidth) / 2;
+                    offsetY = 0;
+                  }
+                  
+                  // 绘制cover效果的主图
+                  ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                };
+                img.onerror = () => {
+                  // 加载失败时绘制灰色背景
+                  ctx.fillStyle = '#f0f0f0';
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                };
+                img.src = clonedMainImg.src;
+                
+                // 替换主图为canvas
+                imgWrapper.replaceChild(canvas, clonedMainImg);
+              }
+            }
           }
-          
+        }).then((canvas) => {
           const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
           if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
@@ -270,10 +271,6 @@ export default {
             });
           }
         }).catch(() => {
-          // 恢复主图原始src
-          if (mainImg && originalSrc) {
-            mainImg.src = originalSrc;
-          }
           this.$toast.fail('保存失败');
         });
       }).catch(() => {
