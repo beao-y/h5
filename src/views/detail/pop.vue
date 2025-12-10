@@ -169,63 +169,60 @@ export default {
         forbidClick: true // 禁止点击
       });
 
-      // 预处理图片，确保 object-fit: cover 生效
-      this.preprocessImages().then(() => {
-        // 获取海报容器元素
-        const posterContainer = document.querySelector('.poster-container');
-        if (!posterContainer) {
-          this.$toast.fail('保存失败');
-          return;
-        }
+      // 获取海报容器元素
+      const posterContainer = document.querySelector('.poster-container');
+      if (!posterContainer) {
+        this.$toast.fail('保存失败');
+        return;
+      }
 
-        // 使用 html2canvas 将 DOM 转换为 canvas
-        import('html2canvas').then((html2canvas) => {
-          // 简化html2canvas配置，确保所有元素都能正确显示
-          html2canvas.default(posterContainer, {
-            useCORS: true, // 允许跨域图片
-            scale: 2, // 提高图片质量
-            backgroundColor: '#ffffff', // 设置背景色
-            logging: false, // 关闭日志
-            allowTaint: true, // 允许跨域图片污染画布
-            useTransform: true, // 使用CSS变换
-            // 确保所有元素都能正确显示
-            ignoreElements: (element) => {
-              // 只忽略display: none的元素，不忽略visibility: hidden的元素
-              return element.style.display === 'none';
-            },
-            // 确保二维码已生成
-            timeout: 5000, // 增加超时时间
-            // 确保图片加载完成
-            onclone: (clonedDoc) => {
-              // 确保所有图片都已加载
-              const images = clonedDoc.querySelectorAll('img');
-              images.forEach(img => {
-                img.crossOrigin = 'anonymous';
-              });
-            }
-          }).then((canvas) => {
-            // 检测是否是微信浏览器
-            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-            
-            if (isWechat) {
-              // 微信浏览器：使用JSSDK保存到相册
-              this.saveImageWithWechatJSSDK(canvas);
-            } else {
-              // 其他浏览器：直接下载图片
-              this.downloadImageDirectly(canvas);
-            }
-          }).catch((error) => {
-            console.error('生成图片失败:', error);
-            this.$toast.fail('保存失败');
-            // 恢复原图
-            this.restoreImages();
-          });
+      // 使用 html2canvas 将 DOM 转换为 canvas
+      import('html2canvas').then((html2canvas) => {
+        // 直接使用html2canvas处理所有图片，不进行预处理
+        html2canvas.default(posterContainer, {
+          useCORS: true, // 允许跨域图片
+          scale: 2, // 提高图片质量
+          backgroundColor: '#ffffff', // 设置背景色
+          logging: false, // 关闭日志
+          allowTaint: true, // 允许跨域图片污染画布
+          useTransform: true, // 使用CSS变换
+          // 确保所有元素都能正确显示
+          ignoreElements: (element) => {
+            // 只忽略display: none的元素
+            return element.style.display === 'none';
+          },
+          // 确保二维码已生成
+          timeout: 5000, // 增加超时时间
+          // 确保所有图片设置正确的跨域属性
+          onclone: (clonedDoc) => {
+            const images = clonedDoc.querySelectorAll('img');
+            images.forEach(img => {
+              // 设置跨域属性
+              img.crossOrigin = 'anonymous';
+              // 确保图片有正确的src
+              if (!img.src || img.src === '') {
+                img.src = img.getAttribute('src') || '';
+              }
+            });
+          }
+        }).then((canvas) => {
+          // 检测是否是微信浏览器
+          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+          
+          if (isWechat) {
+            // 微信浏览器：使用JSSDK保存到相册
+            this.saveImageWithWechatJSSDK(canvas);
+          } else {
+            // 其他浏览器：直接下载图片
+            this.downloadImageDirectly(canvas);
+          }
         }).catch((error) => {
-          console.error('加载 html2canvas 失败:', error);
+          console.error('生成图片失败:', error);
           this.$toast.fail('保存失败');
-          // 恢复原图
-          this.restoreImages();
         });
+      }).catch((error) => {
+        console.error('加载 html2canvas 失败:', error);
+        this.$toast.fail('保存失败');
       });
     },
     
@@ -234,9 +231,6 @@ export default {
       try {
         // 转换为DataURL
         const dataURL = canvas.toDataURL('image/png');
-        
-        // 恢复原图
-        this.restoreImages();
         
         // 检查微信JSSDK是否已加载
         if (window.wx && window.wx.saveImageToPhotosAlbum) {
@@ -304,9 +298,6 @@ export default {
           document.body.removeChild(link);
         }, 100);
         
-        // 恢复原图
-        this.restoreImages();
-        
         // 保存成功提示
         this.$toast.success({
           message: '图片已下载',
@@ -319,107 +310,9 @@ export default {
       } catch (err) {
         console.error('直接下载失败:', err);
         this.$toast.fail('保存失败');
-        // 恢复原图
-        this.restoreImages();
         // 关闭弹窗
         this.visible = false;
       }
-    },
-    // 预处理图片，确保 object-fit: cover 生效
-    preprocessImages() {
-      return new Promise((resolve) => {
-        // 获取所有需要处理的图片
-        const images = document.querySelectorAll('.poster-img');
-        this.originalImages = [];
-
-        // 如果没有图片，直接返回
-        if (images.length === 0) {
-          resolve();
-          return;
-        }
-
-        let processed = 0;
-
-        images.forEach((img, index) => {
-          // 保存原图信息
-          this.originalImages[index] = {
-            src: img.src,
-            style: {
-              objectFit: img.style.objectFit,
-              width: img.style.width,
-              height: img.style.height
-            }
-          };
-
-          // 创建 canvas 处理 object-fit: cover 效果
-          const wrapper = img.parentElement;
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const imgElement = new Image();
-          imgElement.crossOrigin = 'anonymous';
-          imgElement.src = img.src;
-
-          imgElement.onload = () => {
-            // 设置 canvas 大小与容器相同
-            canvas.width = wrapper.offsetWidth;
-            canvas.height = wrapper.offsetHeight;
-
-            // 计算图片绘制的位置和大小，实现 cover 效果
-            const containerRatio = wrapper.offsetWidth / wrapper.offsetHeight;
-            const imageRatio = imgElement.width / imgElement.height;
-            let drawWidth, drawHeight, offsetX, offsetY;
-
-            if (imageRatio > containerRatio) {
-              drawHeight = canvas.height;
-              drawWidth = drawHeight * imageRatio;
-              offsetX = (canvas.width - drawWidth) / 2;
-              offsetY = 0;
-            } else {
-              drawWidth = canvas.width;
-              drawHeight = drawWidth / imageRatio;
-              offsetX = 0;
-              offsetY = (canvas.height - drawHeight) / 2;
-            }
-
-            // 绘制图片到 canvas
-            ctx.drawImage(imgElement, offsetX, offsetY, drawWidth, drawHeight);
-
-            // 用 canvas 替换原图
-            img.src = canvas.toDataURL('image/png');
-            img.style.objectFit = 'fill';
-            img.style.width = '100%';
-            img.style.height = '100%';
-
-            processed++;
-            if (processed === images.length) {
-              resolve();
-            }
-          };
-
-          imgElement.onerror = () => {
-            processed++;
-            if (processed === images.length) {
-              resolve();
-            }
-          };
-        });
-      });
-    },
-    // 恢复原图
-    restoreImages() {
-      if (!this.originalImages) return;
-
-      const images = document.querySelectorAll('.poster-img');
-      images.forEach((img, index) => {
-        const original = this.originalImages[index];
-        if (original) {
-          img.src = original.src;
-          img.style.objectFit = original.style.objectFit;
-          img.style.width = original.style.width;
-          img.style.height = original.style.height;
-        }
-      });
-      this.originalImages = null;
     },
     // 关闭弹窗
     onClose() {
