@@ -178,43 +178,66 @@ export default {
           return;
         }
 
-        // 使用 html2canvas 将 DOM 转换为 canvas
-        import('html2canvas').then((html2canvas) => {
-          html2canvas.default(posterContainer, {
-            useCORS: true, // 允许跨域图片
-            scale: 2, // 提高图片质量
-            backgroundColor: '#ffffff', // 设置背景色
-            logging: false, // 关闭日志
-            allowTaint: true, // 允许跨域图片污染画布
-            // 确保html2canvas正确画出图片
-            useTransform: true,
-            ignoreElements: (element) => {
-              // 忽略可能导致绘制问题的元素
-              return element.style.display === 'none';
-            }
-          }).then((canvas) => {
-            // 检测是否是微信浏览器
+        // 等待一下，确保DOM完全渲染
+        setTimeout(() => {
+          // 使用 html2canvas 将 DOM 转换为 canvas
+          import('html2canvas').then((html2canvas) => {
+            // 微信浏览器特殊配置
             const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            const html2canvasOptions = {
+              useCORS: true, // 允许跨域图片
+              scale: 2, // 提高图片质量
+              backgroundColor: '#ffffff', // 设置背景色
+              logging: false, // 关闭日志
+              allowTaint: true, // 允许跨域图片污染画布
+              useTransform: true, // 使用CSS变换
+              ignoreElements: (element) => {
+                // 忽略可能导致绘制问题的元素
+                return element.style.display === 'none' || element.style.visibility === 'hidden';
+              },
+              // 微信浏览器特殊处理
+              ...(isWechat ? {
+                removeContainer: false, // 不删除临时容器
+                windowWidth: document.documentElement.clientWidth,
+                windowHeight: document.documentElement.clientHeight,
+                // 强制使用传统渲染模式
+                useCORS: true,
+                // 确保图片加载完成
+                onclone: (clonedDoc) => {
+                  // 确保所有图片都已加载
+                  const images = clonedDoc.querySelectorAll('img');
+                  images.forEach(img => {
+                    img.crossOrigin = 'anonymous';
+                    // 重新设置图片src，确保跨域设置生效
+                    const src = img.src;
+                    img.src = '';
+                    img.src = src;
+                  });
+                }
+              } : {})
+            };
             
-            if (isWechat) {
-              // 微信浏览器：使用JSSDK保存到相册
-              this.saveImageWithWechatJSSDK(canvas);
-            } else {
-              // 其他浏览器：直接下载图片
-              this.downloadImageDirectly(canvas);
-            }
+            html2canvas.default(posterContainer, html2canvasOptions).then((canvas) => {
+              if (isWechat) {
+                // 微信浏览器：使用JSSDK保存到相册
+                this.saveImageWithWechatJSSDK(canvas);
+              } else {
+                // 其他浏览器：直接下载图片
+                this.downloadImageDirectly(canvas);
+              }
+            }).catch((error) => {
+              console.error('生成图片失败:', error);
+              this.$toast.fail('保存失败');
+              // 恢复原图
+              this.restoreImages();
+            });
           }).catch((error) => {
-            console.error('生成图片失败:', error);
+            console.error('加载 html2canvas 失败:', error);
             this.$toast.fail('保存失败');
             // 恢复原图
             this.restoreImages();
           });
-        }).catch((error) => {
-          console.error('加载 html2canvas 失败:', error);
-          this.$toast.fail('保存失败');
-          // 恢复原图
-          this.restoreImages();
-        });
+        }, 100);
       });
     },
     
