@@ -176,53 +176,76 @@ export default {
         return;
       }
 
-      // 使用 html2canvas 将 DOM 转换为 canvas
-      import('html2canvas').then((html2canvas) => {
-        // 直接使用html2canvas处理所有图片，不进行预处理
-        html2canvas.default(posterContainer, {
-          useCORS: true, // 允许跨域图片
-          scale: 2, // 提高图片质量
-          backgroundColor: '#ffffff', // 设置背景色
-          logging: false, // 关闭日志
-          allowTaint: true, // 允许跨域图片污染画布
-          useTransform: true, // 使用CSS变换
-          // 确保所有元素都能正确显示
-          ignoreElements: (element) => {
-            // 只忽略display: none的元素
-            return element.style.display === 'none';
-          },
-          // 确保二维码已生成
-          timeout: 5000, // 增加超时时间
-          // 确保所有图片设置正确的跨域属性
-          onclone: (clonedDoc) => {
-            const images = clonedDoc.querySelectorAll('img');
-            images.forEach(img => {
-              // 设置跨域属性
-              img.crossOrigin = 'anonymous';
-              // 确保图片有正确的src
-              if (!img.src || img.src === '') {
-                img.src = img.getAttribute('src') || '';
+      // 确保二维码已经生成
+      this.$nextTick(() => {
+        // 使用 html2canvas 将 DOM 转换为 canvas
+        import('html2canvas').then((html2canvas) => {
+          // 直接使用html2canvas处理所有图片，不进行预处理
+          html2canvas.default(posterContainer, {
+            useCORS: true, // 允许跨域图片
+            scale: 2, // 提高图片质量
+            backgroundColor: '#ffffff', // 设置背景色
+            logging: false, // 关闭日志
+            allowTaint: true, // 允许跨域图片污染画布
+            useTransform: true, // 使用CSS变换
+            // 确保所有元素都能正确显示
+            ignoreElements: (element) => {
+              // 只忽略display: none的元素
+              return element.style.display === 'none';
+            },
+            // 确保二维码已生成
+            timeout: 5000, // 增加超时时间
+            // 确保所有图片设置正确的跨域属性
+            onclone: (clonedDoc) => {
+              const images = clonedDoc.querySelectorAll('img');
+              images.forEach(img => {
+                // 处理本地图片路径，确保html2canvas能正确访问
+                if (img.src.includes('@/assets/')) {
+                  // 替换@/assets/为相对路径
+                  const relativePath = img.src.replace('@/assets/', '/src/assets/');
+                  img.src = relativePath;
+                }
+                // 设置跨域属性
+                img.crossOrigin = 'anonymous';
+                // 确保图片有正确的src
+                if (!img.src || img.src === '') {
+                  img.src = img.getAttribute('src') || '';
+                }
+              });
+              
+              // 确保二维码已生成
+              const qrcodeEl = clonedDoc.getElementById('qrcode');
+              if (qrcodeEl && qrcodeEl.innerHTML === '') {
+                // 如果二维码未生成，尝试重新生成
+                new QRCode(qrcodeEl, {
+                  text: `${window.location.origin}${this.$route.path}?id=${this.$route.params.id}`,
+                  width: 60,
+                  height: 60,
+                  colorDark: '#000000',
+                  colorLight: '#ffffff',
+                  correctLevel: QRCode.CorrectLevel.H
+                });
               }
-            });
-          }
-        }).then((canvas) => {
-          // 检测是否是微信浏览器
-          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-          
-          if (isWechat) {
-            // 微信浏览器：使用JSSDK保存到相册
-            this.saveImageWithWechatJSSDK(canvas);
-          } else {
-            // 其他浏览器：直接下载图片
-            this.downloadImageDirectly(canvas);
-          }
+            }
+          }).then((canvas) => {
+            // 检测是否是微信浏览器
+            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            
+            if (isWechat) {
+              // 微信浏览器：使用JSSDK保存到相册
+              this.saveImageWithWechatJSSDK(canvas);
+            } else {
+              // 其他浏览器：直接下载图片
+              this.downloadImageDirectly(canvas);
+            }
+          }).catch((error) => {
+            console.error('生成图片失败:', error);
+            this.$toast.fail('保存失败');
+          });
         }).catch((error) => {
-          console.error('生成图片失败:', error);
+          console.error('加载 html2canvas 失败:', error);
           this.$toast.fail('保存失败');
         });
-      }).catch((error) => {
-        console.error('加载 html2canvas 失败:', error);
-        this.$toast.fail('保存失败');
       });
     },
     
