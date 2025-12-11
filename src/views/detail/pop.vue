@@ -170,26 +170,14 @@ export default {
 
       // 使用html2canvas保存图片，解决跨域问题
       import('html2canvas').then((html2canvas) => {
-        // 优化：保持文字清晰度，同时提高生成速度
+        // 优化：调整scale参数，平衡清晰度和生成速度
         const options = {
-          scale: 2, // 保持较高的缩放比例，确保文字清晰
+          scale: 1.5, // 降低缩放比例，提高生成速度，同时保持文字相对清晰
           backgroundColor: '#ffffff',
           useCORS: true,
           allowTaint: true,
           logging: false,
-          timeout: 5000, // 设置合理的超时时间
-          onclone: (document) => {
-            // 在克隆的DOM上进行优化，不影响原始DOM
-            const cloneImages = document.querySelectorAll('img');
-            cloneImages.forEach(img => {
-              // 降低克隆DOM中图片的分辨率，加快生成速度
-              // 但保持原始尺寸，确保布局不变
-              img.style.transform = 'scale(0.5)';
-              img.style.transformOrigin = 'top left';
-              img.style.width = (img.width * 2) + 'px';
-              img.style.height = (img.height * 2) + 'px';
-            });
-          }
+          timeout: 5000 // 设置合理的超时时间
         };
 
         // 微信浏览器特殊处理：优化生成参数
