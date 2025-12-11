@@ -17,7 +17,7 @@
         
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
-          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" />
+          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" crossorigin="anonymous" />
         </div>
         
         <!-- 价格信息 -->
