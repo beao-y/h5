@@ -152,40 +152,7 @@ export default {
       });
     },
 
-    // 在saveImage方法中添加这个函数
-async  convertImagesToBase64(container) {
-  const images = container.querySelectorAll('img');
-  const promises = [];
-  
-  images.forEach(img => {
-    if (img.src && !img.src.startsWith('data:')) {
-      promises.push(new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const tempImg = new Image();
-        
-        tempImg.crossOrigin = 'anonymous';
-        tempImg.onload = () => {
-          canvas.width = tempImg.width;
-          canvas.height = tempImg.height;
-          ctx.drawImage(tempImg, 0, 0);
-          img.src = canvas.toDataURL('image/jpeg', 0.9);
-          resolve();
-        };
-        
-        tempImg.onerror = () => {
-          // 使用透明像素占位
-          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PC9zdmc+';
-          resolve();
-        };
-        
-        tempImg.src = img.src;
-      }));
-    }
-  });
-  
-  await Promise.all(promises);
-},
+    
     
     // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
     saveImage() {
@@ -202,10 +169,12 @@ async  convertImagesToBase64(container) {
       }
 
       // 使用html-to-image保存图片（替代html2canvas）
-      import('html-to-image').then(async (htmlToImage) => {
+      import('html-to-image').then((htmlToImage) => {
         // 先处理所有图片，确保跨域属性设置正确
-         // 先转换所有图片为base64
-    await this.convertImagesToBase64(posterContainer);
+        const images = posterContainer.querySelectorAll('img');
+        images.forEach(img => {
+          img.crossOrigin = 'anonymous';
+        });
         
         // 使用html-to-image的toPng方法，更好的跨域支持
         htmlToImage.toPng(posterContainer, {
