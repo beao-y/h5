@@ -18,7 +18,7 @@
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
           <img 
-            :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" 
+            :src="info.ImagesList && info.ImagesList.length > 0 ? transformImageUrl(info.ImagesList[0]) : ''" 
             alt="项目图片" 
             class="poster-img" 
             crossorigin="anonymous"
@@ -154,6 +154,20 @@ export default {
           correctLevel: QRCode.CorrectLevel.H
         });
       });
+    },
+    
+    // 转换图片URL，使用代理路径避免跨域
+    transformImageUrl(url) {
+      if (!url) return '';
+      
+      // 检查是否是绝对URL
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        // 生产环境和开发环境都使用 /image-proxy/ 路径
+        // 服务器需要配置反向代理，将 /image-proxy/ 路径代理到 https://property.limetime.cn/
+        return url.replace(/https?:\/\/property\.limetime\.cn\//, '/image-proxy/');
+      }
+      
+      return url;
     },
     
     // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
