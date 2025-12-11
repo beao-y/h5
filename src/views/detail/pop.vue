@@ -170,68 +170,104 @@ export default {
 
       // 使用html2canvas保存图片，解决跨域问题
       import('html2canvas').then((html2canvas) => {
-        // 优化：降低生成图片的分辨率，加快生成速度
+        // 优化：保持文字清晰度，同时提高生成速度
         const options = {
-          scale: 1, // 降低缩放比例，加快生成速度
+          scale: 2, // 保持较高的缩放比例，确保文字清晰
           backgroundColor: '#ffffff',
           useCORS: true,
           allowTaint: true,
           logging: false,
-          timeout: 5000 // 设置合理的超时时间
+          timeout: 5000, // 设置合理的超时时间
+          onclone: (document) => {
+            // 在克隆的DOM上进行优化，不影响原始DOM
+            const cloneImages = document.querySelectorAll('img');
+            cloneImages.forEach(img => {
+              // 降低克隆DOM中图片的分辨率，加快生成速度
+              // 但保持原始尺寸，确保布局不变
+              img.style.transform = 'scale(0.5)';
+              img.style.transformOrigin = 'top left';
+              img.style.width = (img.width * 2) + 'px';
+              img.style.height = (img.height * 2) + 'px';
+            });
+          }
         };
 
         // 微信浏览器特殊处理：优化生成参数
         const isWechat = /MicroMessenger/i.test(navigator.userAgent);
         if (isWechat) {
-          // 微信浏览器：进一步降低分辨率，加快生成速度
-          options.scale = 1;
-          // 使用更快的渲染模式
+          // 微信浏览器：使用更快的渲染模式
           options.useCORS = false;
           options.allowTaint = true;
-        }
-        
-        // 使用html2canvas的toPng方法
-        html2canvas.default(posterContainer, options).then((canvas) => {
-          // 将canvas转换为dataURL
-          const dataUrl = canvas.toDataURL('image/png');
-          
-          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-            // 微信浏览器使用JSSDK保存到相册
-            window.wx.saveImageToPhotosAlbum({
-              filePath: dataUrl,
-              success: () => {
-                this.$toast.success({
-                  message: '图片已保存到相册',
-                  duration: 1500,
-                  onClose: () => this.visible = false
-                });
-              },
-              fail: (err) => {
-                console.error('微信保存图片失败:', err);
-                this.$toast.fail('保存失败，请重试');
-                this.visible = false;
+          // 预加载图片，确保生成时图片已加载完成
+          const images = posterContainer.querySelectorAll('img');
+          const imagePromises = Array.from(images).map(img => {
+            return new Promise((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = resolve;
+                img.onerror = resolve;
               }
             });
-          } else {
-            // 其他浏览器直接下载
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = `项目详情_${new Date().getTime()}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+          });
+          
+          // 等待所有图片加载完成后再生成
+          Promise.all(imagePromises).then(() => {
+            generateCanvas();
+          });
+        } else {
+          // 其他浏览器直接生成
+          generateCanvas();
+        }
+        
+        // 生成canvas的函数
+        const generateCanvas = () => {
+          // 检测是否为微信浏览器
+          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+          
+          // 使用html2canvas生成canvas
+          html2canvas.default(posterContainer, options).then((canvas) => {
+            // 将canvas转换为dataURL
+            const dataUrl = canvas.toDataURL('image/png');
             
-            this.$toast.success({
-              message: '图片已下载',
-              duration: 1500,
-              onClose: () => this.visible = false
-            });
-          }
-        }).catch(() => {
-          this.$toast.fail('保存失败');
-        });
+            if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+              // 微信浏览器使用JSSDK保存到相册
+              window.wx.saveImageToPhotosAlbum({
+                filePath: dataUrl,
+                success: () => {
+                  this.$toast.success({
+                    message: '图片已保存到相册',
+                    duration: 1500,
+                    onClose: () => this.visible = false
+                  });
+                },
+                fail: (err) => {
+                  console.error('微信保存图片失败:', err);
+                  this.$toast.fail('保存失败，请重试');
+                  this.visible = false;
+                }
+              });
+            } else {
+              // 其他浏览器直接下载
+              const link = document.createElement('a');
+              link.href = dataUrl;
+              link.download = `项目详情_${new Date().getTime()}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              this.$toast.success({
+                message: '图片已下载',
+                duration: 1500,
+                onClose: () => this.visible = false
+              });
+            }
+          }).catch(() => {
+            this.$toast.fail('保存失败');
+          });
+        };
       }).catch(() => {
-        this.$toast.fail('保存失败');
+        this.$toast.fail('加载html2canvas失败');
       });
     },
     
