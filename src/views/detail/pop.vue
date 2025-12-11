@@ -17,7 +17,12 @@
         
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
-          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" />
+          <img 
+            :src="info.ImagesList && info.ImagesList.length > 0 ? processedImages[0] || info.ImagesList[0] : ''" 
+            alt="项目图片" 
+            class="poster-img" 
+            crossorigin="anonymous"
+          />
         </div>
         
         <!-- 价格信息 -->
@@ -98,7 +103,9 @@ export default {
       // 本地状态，用于控制弹窗显示
       visible: this.showSharePopup,
       // 二维码实例
-      qrCode: null
+      qrCode: null,
+      // 处理后的图片数组，用于解决跨域问题
+      processedImages: []
     };
   },
   watch: {
@@ -111,15 +118,17 @@ export default {
       console.log(newVal);
       
       this.$emit('update:showSharePopup', newVal);
-      // 当弹窗显示时，重新生成二维码
+      // 当弹窗显示时，处理图片和生成二维码
       if (newVal) {
+        this.processImages();
         this.generateQRCode();
       }
     }
   },
   mounted() {
-    // 组件挂载后生成二维码
+    // 组件挂载后处理图片和生成二维码
     if (this.visible) {
+      this.processImages();
       this.generateQRCode();
     }
   },
@@ -139,7 +148,7 @@ export default {
         
         qrcodeEl.innerHTML = '';
         const id = this.$route.params.id;
-        const url = `${window.location.origin}${this.$route.path}?id=${id}`;
+        const url = `${window.location.origin}${this.$route.path}/${id}`;
         
         this.qrCode = new QRCode(qrcodeEl, {
           text: url,
@@ -148,6 +157,50 @@ export default {
           colorDark: '#000000',
           colorLight: '#ffffff',
           correctLevel: QRCode.CorrectLevel.H
+        });
+      });
+    },
+    
+    // 处理图片，将跨域图片转换为base64格式，避免CORS错误
+    processImages() {
+      if (!this.info.ImagesList || this.info.ImagesList.length === 0) {
+        return;
+      }
+      
+      // 清空处理后的图片数组
+      this.processedImages = [];
+      
+      // 遍历图片列表，处理每张图片
+      this.info.ImagesList.forEach((imageUrl, index) => {
+        if (!imageUrl) {
+          this.processedImages[index] = '';
+          return;
+        }
+        
+        // 使用fetch API获取图片数据
+        fetch(imageUrl, {
+          mode: 'cors',
+          credentials: 'include'
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.blob();
+        })
+        .then(blob => {
+          // 创建FileReader对象，将blob转换为base64
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            // 将base64数据存储到processedImages数组中
+            this.processedImages[index] = reader.result;
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(error => {
+          console.error('处理图片失败:', error);
+          // 处理失败时，使用原图URL
+          this.processedImages[index] = imageUrl;
         });
       });
     },
@@ -166,40 +219,87 @@ export default {
         return;
       }
 
-      // 使用html-to-image保存图片（替代html2canvas）
-      import('html-to-image').then((htmlToImage) => {
+      // 确保所有图片都已处理完成
+      this.$nextTick(() => {
+        // 使用html-to-image保存图片（替代html2canvas）
+        import('html-to-image').then((htmlToImage) => {
+          // 使用html-to-image的toPng方法，配置跨域选项
+          htmlToImage.toPng(posterContainer, {
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: false
+          }).then((dataUrl) => {
+            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+            
+            if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+              // 微信浏览器使用JSSDK保存到相册
+              window.wx.saveImageToPhotosAlbum({
+                filePath: dataUrl,
+                success: () => {
+                  this.$toast.success({
+                    message: '图片已保存到相册',
+                    duration: 1500,
+                    onClose: () => this.visible = false
+                  });
+                },
+                fail: (err) => {
+                  console.error('微信保存图片失败:', err);
+                  this.$toast.fail('保存失败');
+                  this.visible = false;
+                }
+              });
+            } else {
+              try {
+                // 其他浏览器直接下载
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = `项目详情_${new Date().getTime()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.$toast.success({
+                  message: '图片已下载',
+                  duration: 1500,
+                  onClose: () => this.visible = false
+                });
+              } catch (err) {
+                console.error('下载图片失败:', err);
+                this.$toast.fail('保存失败');
+                this.visible = false;
+              }
+            }
+          }).catch((err) => {
+            console.error('生成图片失败:', err);
+            // 如果html-to-image失败，尝试使用html2canvas作为备选方案
+            this.tryHtml2Canvas(posterContainer);
+          });
+        }).catch((err) => {
+          console.error('加载html-to-image失败:', err);
+          this.$toast.fail('保存失败');
+        });
+      });
+    },
+    
+    // 尝试使用html2canvas作为备选方案
+    tryHtml2Canvas(posterContainer) {
+      try {
         // 先处理所有图片，确保跨域属性设置正确
         const images = posterContainer.querySelectorAll('img');
         images.forEach(img => {
           img.crossOrigin = 'anonymous';
         });
         
-        // 使用html-to-image的toPng方法，更好的跨域支持
-        htmlToImage.toPng(posterContainer, {
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          crossorigin: 'anonymous'
-        }).then((dataUrl) => {
-          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-          
-          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-            // 微信浏览器使用JSSDK保存到相册
-            window.wx.saveImageToPhotosAlbum({
-              filePath: dataUrl,
-              success: () => {
-                this.$toast.success({
-                  message: '图片已保存到相册',
-                  duration: 1500,
-                  onClose: () => this.visible = false
-                });
-              },
-              fail: () => {
-                this.$toast.fail('保存失败');
-                this.visible = false;
-              }
-            });
-          } else {
-            // 其他浏览器直接下载
+        import('html2canvas').then((html2canvas) => {
+          html2canvas.default(posterContainer, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: false
+          }).then((canvas) => {
+            const dataUrl = canvas.toDataURL('image/png');
+            
             const link = document.createElement('a');
             link.href = dataUrl;
             link.download = `项目详情_${new Date().getTime()}.png`;
@@ -212,13 +312,18 @@ export default {
               duration: 1500,
               onClose: () => this.visible = false
             });
-          }
-        }).catch(() => {
+          }).catch((err) => {
+            console.error('html2canvas生成图片失败:', err);
+            this.$toast.fail('保存失败');
+          });
+        }).catch((err) => {
+          console.error('加载html2canvas失败:', err);
           this.$toast.fail('保存失败');
         });
-      }).catch(() => {
+      } catch (err) {
+        console.error('尝试html2canvas失败:', err);
         this.$toast.fail('保存失败');
-      });
+      }
     },
     
     // 关闭弹窗
