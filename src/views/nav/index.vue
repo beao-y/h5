@@ -196,7 +196,7 @@ export default {
                 'x': 22.5,
                 'y': 60
               },
-              'src': require('@/assets/img/position.png') // 本地标记图标
+              'src': require('@/assets/img/address-icon.png') // 本地标记图标
             })
           },
           geometries: markerData
