@@ -268,7 +268,7 @@ export default {
     onNavigationSelect(action) {
       if (!this.selectedPoint) return;
       
-      // 项目地址（使用点位名称作为地址）
+      // 项目地址
       const address = this.selectedPoint.name;
       // 地址编码，确保可以被导航app识别
       const encodedAddress = encodeURIComponent(address);
@@ -280,6 +280,8 @@ export default {
       
       // 获取设备类型
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      // 检测是否为微信浏览器
+      const isWeixin = /MicroMessenger/i.test(navigator.userAgent);
       
       // 导航app URL Scheme优化，针对微信浏览器和高德地图做特殊处理
       let appUrl = '';
@@ -294,46 +296,77 @@ export default {
           // iOS系统使用更可靠的高德URL Scheme
           appUrl = `iosamap://path?sourceApplication=applicationName&backScheme=applicationScheme&dlat=${lat}&dlon=${lng}&dname=${encodedAddress}&dev=0&t=0`;
         } else {
-          // Android系统使用高德URL Scheme
-          appUrl = `androidamap://viewMap?sourceApplication=applicationName&poiname=${encodedAddress}&lat=${lat}&lon=${lng}&dev=0`;
+          // Android系统使用高德地图的其他URL Scheme
+          appUrl = `androidamap://route?sourceApplication=applicationName&dlat=${lat}&dlon=${lng}&dname=${encodedAddress}&dev=0&t=0`;
         }
-        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id461703208' : 'https://a.amap.com/';
+        // 高德地图使用导航API链接，支持经纬度传递
+        downloadUrl = `https://uri.amap.com/navigation?to=${lat},${lng},${encodedAddress}&mode=driving&policy=1&src=applicationName`;
       } 
-      // 百度地图URL Scheme
+      // 百度地图处理
       else if (selectedApp === 'baidu') {
-        if (isIOS) {
-          // iOS系统使用百度URL Scheme
-          appUrl = `baidumap://map/direction?origin={{我的位置}}&destination=name:${encodedAddress}|latlng:${latLng}&mode=driving&coord_type=bd09ll`;
-        } else {
-          // Android系统使用百度URL Scheme
-          appUrl = `bdapp://map/direction?origin={{我的位置}}&destination=name:${encodedAddress}|latlng:${latLng}&mode=driving&coord_type=bd09ll`;
-        }
-        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id452186370' : 'https://map.baidu.com/zt/client/index/';
+        appUrl = isIOS ? 
+          `baidumap://map/direction?origin=我的位置&destination=${latLng}|${encodedAddress}&mode=driving&src=iosapp` : 
+          `baidumap://map/direction?origin=我的位置&destination=${latLng}|${encodedAddress}&mode=driving&src=andr`;
+        downloadUrl = `https://map.baidu.com/mobile/webapp/index/index/#/index`;
       } 
-      // 腾讯地图URL Scheme
-      else if (selectedApp === 'tencent') {
-        if (isIOS) {
-          // iOS系统使用腾讯URL Scheme
-          appUrl = `qqmap://map/routeplan?from=我的位置&type=drive&to=${encodedAddress}&tocoord=${latLng}&policy=0&referer=OB4BZ-D4W3U-B7VVO-4PJWW-6TKDJ-WPB77`;
-        } else {
-          // Android系统使用腾讯URL Scheme
-          appUrl = `qqmap://map/routeplan?type=drive&from=我的位置&fromcoord=CurrentLocation&to=${encodedAddress}&tocoord=${latLng}&policy=0&referer=OB4BZ-D4W3U-B7VVO-4PJWW-6TKDJ-WPB77`;
-        }
-        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id481623192' : 'https://map.qq.com/mobile/guidedownload/';
+      // 腾讯地图处理
+      else {
+        appUrl = isIOS ? 
+          `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&tocoord=${latLng}&type=drive` : 
+          `qqmap://map/routeplan?from=我的位置&to=${encodedAddress}&tocoord=${latLng}&type=drive`;
+        downloadUrl = `https://map.qq.com/download.html`;
       }
       
-      // 尝试打开导航app
-      const openApp = () => {
+      // 微信浏览器特殊处理：先尝试直接打开APP，失败后跳转带参数的导航链接
+      if (isWeixin) {
+        // 尝试直接打开APP
         window.location.href = appUrl;
         
-        // 设置定时器，500ms后检查是否成功打开app，如果没有则跳转到下载页面
+        // 微信浏览器中，使用较短的延迟后直接跳转到带参数的导航链接
         setTimeout(() => {
           window.location.href = downloadUrl;
-        }, 500);
-      };
-      
-      // 执行打开app操作
-      openApp();
+        }, 1000);
+      } else {
+        // 非微信浏览器使用原有逻辑
+        // 检测当前浏览器是否支持visibilitychange事件
+        const supportsVisibilityChange = typeof document.hidden !== 'undefined';
+        
+        // 尝试打开应用
+        window.location.href = appUrl;
+        
+        // 仅在支持visibilitychange事件的浏览器中执行检测逻辑
+        if (supportsVisibilityChange) {
+          // 检测页面可见性变化，判断应用是否成功打开
+          let appOpened = false;
+          
+          // 页面隐藏时，表示应用可能已成功打开
+          const handleVisibilityChange = () => {
+            if (document.hidden) {
+              appOpened = true;
+            }
+          };
+          
+          // 添加可见性变化事件监听
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          
+          // 设置定时器，3000ms后检查是否成功打开应用（延长时间）
+          setTimeout(() => {
+            // 移除事件监听
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            
+            // 如果页面没有隐藏，说明应用没有打开，跳转到对应官方的下载网址
+            if (!appOpened) {
+              // 使用setTimeout再次延迟，确保应用有足够时间打开
+              setTimeout(() => {
+                // 再次检查页面是否隐藏
+                if (!document.hidden) {
+                  window.location.href = downloadUrl;
+                }
+              }, 500);
+            }
+          }, 3000);
+        }
+      }
       
       // 关闭导航选择菜单
       this.showNavigationSheet = false;
