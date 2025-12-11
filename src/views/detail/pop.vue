@@ -17,12 +17,7 @@
         
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
-          <img 
-            :src="info.ImagesList && info.ImagesList.length > 0 ? transformImageUrl(info.ImagesList[0]) : ''" 
-            alt="项目图片" 
-            class="poster-img" 
-            crossorigin="anonymous"
-          />
+          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" />
         </div>
         
         <!-- 价格信息 -->
@@ -116,7 +111,7 @@ export default {
       console.log(newVal);
       
       this.$emit('update:showSharePopup', newVal);
-      // 当弹窗显示时，生成二维码
+      // 当弹窗显示时，重新生成二维码
       if (newVal) {
         this.generateQRCode();
       }
@@ -143,7 +138,8 @@ export default {
         if (!qrcodeEl) return;
         
         qrcodeEl.innerHTML = '';
-        const url = `${window.location.origin}${this.$route.path}/${this.$route.params.id}`;
+        const id = this.$route.params.id;
+        const url = `${window.location.origin}${this.$route.path}/${id}`;
         
         this.qrCode = new QRCode(qrcodeEl, {
           text: url,
@@ -155,20 +151,41 @@ export default {
         });
       });
     },
-    
-    // 转换图片URL，使用代理路径避免跨域
-    transformImageUrl(url) {
-      if (!url) return '';
-      
-      // 检查是否是绝对URL
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        // 生产环境和开发环境都使用 /image-proxy/ 路径
-        // 服务器需要配置反向代理，将 /image-proxy/ 路径代理到 https://property.limetime.cn/
-        return url.replace(/https?:\/\/property\.limetime\.cn\//, '/image-proxy/');
-      }
-      
-      return url;
-    },
+
+    // 在saveImage方法中添加这个函数
+async  convertImagesToBase64(container) {
+  const images = container.querySelectorAll('img');
+  const promises = [];
+  
+  images.forEach(img => {
+    if (img.src && !img.src.startsWith('data:')) {
+      promises.push(new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const tempImg = new Image();
+        
+        tempImg.crossOrigin = 'anonymous';
+        tempImg.onload = () => {
+          canvas.width = tempImg.width;
+          canvas.height = tempImg.height;
+          ctx.drawImage(tempImg, 0, 0);
+          img.src = canvas.toDataURL('image/jpeg', 0.9);
+          resolve();
+        };
+        
+        tempImg.onerror = () => {
+          // 使用透明像素占位
+          img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PC9zdmc+';
+          resolve();
+        };
+        
+        tempImg.src = img.src;
+      }));
+    }
+  });
+  
+  await Promise.all(promises);
+},
     
     // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
     saveImage() {
@@ -184,94 +201,55 @@ export default {
         return;
       }
 
-      // 使用html-to-image保存图片，移除跨域处理，避免CORS错误
-      import('html-to-image').then((htmlToImage) => {
-        // 配置选项，移除useCORS和allowTaint，避免CORS错误
-        const options = {
+      // 使用html-to-image保存图片（替代html2canvas）
+      import('html-to-image').then(async (htmlToImage) => {
+        // 先处理所有图片，确保跨域属性设置正确
+         // 先转换所有图片为base64
+    await this.convertImagesToBase64(posterContainer);
+        
+        // 使用html-to-image的toPng方法，更好的跨域支持
+        htmlToImage.toPng(posterContainer, {
           pixelRatio: 2,
           backgroundColor: '#ffffff',
-          // 不使用CORS选项，避免触发跨域请求
-          // useCORS: false,
-          // allowTaint: false,
-          // 添加超时设置
-          timeout: 10000
-        };
-
-        // 克隆容器，避免影响原始内容
-        const clonedContainer = posterContainer.cloneNode(true);
-        const clonedImages = clonedContainer.querySelectorAll('img');
-        
-        // 为克隆的图片添加跨域属性
-        clonedImages.forEach((img) => {
-          img.crossOrigin = 'anonymous';
-          // 如果图片加载失败，使用占位图
-          img.onerror = function() {
-            this.src = '';
-            this.style.backgroundColor = '#f0f0f0';
-          };
-        });
-
-        // 将克隆的容器添加到DOM中，确保渲染
-        document.body.appendChild(clonedContainer);
-        clonedContainer.style.position = 'absolute';
-        clonedContainer.style.top = '-9999px';
-        clonedContainer.style.left = '-9999px';
-
-        // 使用html-to-image的toPng方法
-        htmlToImage.toPng(clonedContainer, options)
-          .then((dataUrl) => {
-            // 移除克隆的容器
-            document.body.removeChild(clonedContainer);
-            
-            const isWechat = /MicroMessenger/i.test(navigator.userAgent);
-            
-            if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-              // 微信浏览器使用JSSDK保存到相册
-              window.wx.saveImageToPhotosAlbum({
-                filePath: dataUrl,
-                success: () => {
-                  this.$toast.success({
-                    message: '图片已保存到相册',
-                    duration: 1500,
-                    onClose: () => this.visible = false
-                  });
-                },
-                fail: (err) => {
-                  console.error('微信保存图片失败:', err);
-                  this.$toast.fail('保存失败');
-                  this.visible = false;
-                }
-              });
-            } else {
-              try {
-                // 其他浏览器直接下载
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = `项目详情_${new Date().getTime()}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
+          crossorigin: 'anonymous'
+        }).then((dataUrl) => {
+          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+          
+          if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
+            // 微信浏览器使用JSSDK保存到相册
+            window.wx.saveImageToPhotosAlbum({
+              filePath: dataUrl,
+              success: () => {
                 this.$toast.success({
-                  message: '图片已下载',
+                  message: '图片已保存到相册',
                   duration: 1500,
                   onClose: () => this.visible = false
                 });
-              } catch (err) {
-                console.error('下载图片失败:', err);
+              },
+              fail: () => {
                 this.$toast.fail('保存失败');
                 this.visible = false;
               }
-            }
-          })
-          .catch((err) => {
-            // 移除克隆的容器
-            document.body.removeChild(clonedContainer);
-            console.error('生成图片失败:', err);
-            this.$toast.fail('保存失败');
-          });
-      }).catch((err) => {
-        console.error('加载html-to-image失败:', err);
+            });
+          } else {
+            // 其他浏览器直接下载
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `项目详情_${new Date().getTime()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            this.$toast.success({
+              message: '图片已下载',
+              duration: 1500,
+              onClose: () => this.visible = false
+            });
+          }
+        }).catch(() => {
+          this.$toast.fail('保存失败');
+        });
+      }).catch(() => {
         this.$toast.fail('保存失败');
       });
     },
