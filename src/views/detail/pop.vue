@@ -13,11 +13,17 @@
       <div class="popup-close" @click="onClose">
         <van-icon name="cross" size="18" color="#666" />
       </div>
-      <div class="poster-container">
+      <div class="poster-container" ref="posterContainer">
         
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
-          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" crossorigin="anonymous" />
+          <img 
+            :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : placeholderImage" 
+            alt="项目图片" 
+            class="poster-img"
+            ref="mainImage"
+            crossorigin="anonymous"
+          />
         </div>
         
         <!-- 价格信息 -->
@@ -25,7 +31,6 @@
           <span class="price-label">约</span>
           <span class="price-number">{{ info.Price}}</span>
           <span class="price-unit">元/㎡</span>
-
         </div>
         
         <!-- 项目名称 -->
@@ -60,20 +65,20 @@
         
         <!-- 二维码部分 -->
         <div class="qrcode-section">
-          <img src="@/assets/img/logo.png" alt="二维码" class="qrcode-logo" />
+          <img src="@/assets/img/logo.png" alt="二维码" class="qrcode-logo" crossorigin="anonymous" />
           <div class="qrcode-content">
             <p class="qrcode-tip">长按识别二维码了解更多</p>
-          <div id="qrcode" class="qrcode-img"></div>
+            <div id="qrcode" class="qrcode-img"></div>
           </div>
-          
-          
         </div>
       </div>
     </van-popup>
     
     <!-- 悬浮保存图片按钮 -->
     <div class="save-button" v-if="visible">
-      <van-button type="primary" block @click="saveImage" native-type="button">保存图片</van-button>
+      <van-button type="primary" block @click="saveWithCanvas" :loading="isSaving" native-type="button">
+        {{ isSaving ? '生成中...' : '保存图片' }}
+      </van-button>
     </div>
   </div>
 </template>
@@ -95,42 +100,52 @@ export default {
   },
   data() {
     return {
-      // 本地状态，用于控制弹窗显示
       visible: this.showSharePopup,
-      // 二维码实例
-      qrCode: null
+      qrCode: null,
+      isSaving: false,
+      placeholderImage: this.createPlaceholderImage(),
+      qrCodeDataUrl: null,
+      logoDataUrl: null
     };
   },
   watch: {
-    // 监听 prop 变化，更新本地状态
     showSharePopup(newVal) {
       this.visible = newVal;
     },
-    // 监听本地状态变化，通知父组件
     visible(newVal) {
-      console.log(newVal);
-      
       this.$emit('update:showSharePopup', newVal);
-      // 当弹窗显示时，重新生成二维码
       if (newVal) {
         this.generateQRCode();
+        this.preloadImages();
       }
+    },
+    'info.ImagesList': {
+      handler() {
+        if (this.visible) {
+          this.preloadImages();
+        }
+      },
+      immediate: true
     }
   },
   mounted() {
-    // 组件挂载后生成二维码
     if (this.visible) {
       this.generateQRCode();
+      this.preloadImages();
     }
   },
   beforeUnmount() {
-    // 组件卸载前销毁二维码实例
     if (this.qrCode) {
       this.qrCode.clear();
       this.qrCode = null;
     }
   },
   methods: {
+    // 创建透明占位图
+    createPlaceholderImage() {
+      return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PC9zdmc+';
+    },
+
     // 生成二维码
     generateQRCode() {
       this.$nextTick(() => {
@@ -149,77 +164,461 @@ export default {
           colorLight: '#ffffff',
           correctLevel: QRCode.CorrectLevel.H
         });
+        
+        // 获取二维码的data URL
+        this.$nextTick(() => {
+          const qrCanvas = qrcodeEl.querySelector('canvas');
+          if (qrCanvas) {
+            this.qrCodeDataUrl = qrCanvas.toDataURL('image/png');
+          }
+        });
       });
     },
 
-    
-    
-    // 保存图片（微信浏览器使用JSSDK，其他浏览器直接下载）
-    saveImage() {
+    // 预加载图片
+    async preloadImages() {
+      try {
+        // 预加载Logo
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        this.logoDataUrl = await new Promise((resolve) => {
+          logoImg.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = logoImg.width;
+            canvas.height = logoImg.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(logoImg, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          logoImg.onerror = () => {
+            resolve(this.createPlaceholderImage());
+          };
+          logoImg.src = require('@/assets/img/logo.png');
+        });
+      } catch (error) {
+        console.error('预加载图片失败:', error);
+      }
+    },
+
+    // 加载图片并处理跨域
+    loadImage(src) {
+      return new Promise((resolve, reject) => {
+        if (!src || src === this.placeholderImage) {
+          reject(new Error('无有效图片'));
+          return;
+        }
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          try {
+            // 创建Canvas并转换为data URL
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
+            // 转换为data URL避免跨域问题
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            resolve({
+              dataUrl,
+              width: img.width,
+              height: img.height
+            });
+          } catch (error) {
+            reject(error);
+          }
+        };
+        
+        img.onerror = (error) => {
+          console.warn('图片加载失败:', src, error);
+          reject(new Error('图片加载失败'));
+        };
+        
+        // 添加缓存破坏参数
+        const url = new URL(src, window.location.href);
+        url.searchParams.set('_t', Date.now());
+        img.src = url.toString();
+        
+        // 设置超时
+        setTimeout(() => {
+          if (!img.complete) {
+            reject(new Error('图片加载超时'));
+          }
+        }, 10000);
+      });
+    },
+
+    // 绘制圆角矩形
+    drawRoundedRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    },
+
+    // 绘制文字（自动换行）
+    drawText(ctx, text, x, y, maxWidth, lineHeight = 1.2) {
+      const words = text.split('');
+      let line = '';
+      let lineY = y;
+      
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i];
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        
+        if (testWidth > maxWidth && i > 0) {
+          ctx.fillText(line, x, lineY);
+          line = words[i];
+          lineY += lineHeight * parseInt(ctx.font);
+        } else {
+          line = testLine;
+        }
+      }
+      
+      ctx.fillText(line, x, lineY);
+      return lineY;
+    },
+
+    // 使用Canvas生成海报
+    async saveWithCanvas() {
+      if (this.isSaving) return;
+      
+      this.isSaving = true;
       this.$toast.loading({
-        message: '保存中...',
+        message: '生成海报中...',
         duration: 0,
         forbidClick: true
       });
 
-      const posterContainer = document.querySelector('.poster-container');
-      if (!posterContainer) {
-        this.$toast.fail('保存失败');
-        return;
-      }
-
-      // 使用html-to-image保存图片（替代html2canvas）
-      import('html-to-image').then((htmlToImage) => {
-        // 先处理所有图片，确保跨域属性设置正确
-        const images = posterContainer.querySelectorAll('img');
-        images.forEach(img => {
-          img.crossOrigin = 'anonymous';
+      try {
+        // 1. 创建Canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 2. 设置尺寸（适配手机屏幕）
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const baseWidth = 375; // 设计稿宽度
+        const baseHeight = 667; // 设计稿高度
+        const scale = 2; // 输出2倍图
+        
+        canvas.width = baseWidth * scale * devicePixelRatio;
+        canvas.height = baseHeight * scale * devicePixelRatio;
+        
+        // 3. 缩放Canvas
+        ctx.scale(devicePixelRatio * scale, devicePixelRatio * scale);
+        
+        // 4. 绘制背景
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, baseWidth, baseHeight);
+        
+        // 5. 绘制主图片
+        await this.drawMainImage(ctx, baseWidth, baseHeight);
+        
+        // 6. 绘制价格
+        this.drawPrice(ctx, baseWidth, baseHeight);
+        
+        // 7. 绘制项目名称
+        this.drawProjectName(ctx, baseWidth, baseHeight);
+        
+        // 8. 绘制标签
+        this.drawTags(ctx, baseWidth, baseHeight);
+        
+        // 9. 绘制基本信息
+        this.drawInfoSection(ctx, baseWidth, baseHeight);
+        
+        // 10. 绘制底部区域
+        this.drawBottomSection(ctx, baseWidth, baseHeight);
+        
+        // 11. 保存图片
+        await this.saveCanvasImage(canvas);
+        
+        this.$toast.success({
+          message: '海报生成成功',
+          duration: 1500,
+          onClose: () => this.visible = false
         });
         
-        // 使用html-to-image的toPng方法，更好的跨域支持
-        htmlToImage.toPng(posterContainer, {
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          crossorigin: 'anonymous'
-        }).then((dataUrl) => {
+      } catch (error) {
+        console.error('生成海报失败:', error);
+        this.$toast.fail('生成失败: ' + error.message);
+      } finally {
+        this.isSaving = false;
+        this.$toast.clear();
+      }
+    },
+
+    // 绘制主图片
+    async drawMainImage(ctx, width, height) {
+      if (!this.info.ImagesList || this.info.ImagesList.length === 0) {
+        // 绘制占位图
+        ctx.fillStyle = '#F5F5F5';
+        this.drawRoundedRect(ctx, 20, 20, width - 40, 200, 8);
+        ctx.fill();
+        
+        ctx.fillStyle = '#999999';
+        ctx.font = '14px PingFang SC, Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('暂无项目图片', width / 2, 120);
+        return;
+      }
+      
+      try {
+        // 加载图片
+        const imgData = await this.loadImage(this.info.ImagesList[0]);
+        const img = new Image();
+        
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = imgData.dataUrl;
+        });
+        
+        // 计算图片位置和尺寸
+        const imgX = 20;
+        const imgY = 20;
+        const imgWidth = width - 40;
+        const imgHeight = 200;
+        
+        // 绘制圆角矩形遮罩
+        ctx.save();
+        this.drawRoundedRect(ctx, imgX, imgY, imgWidth, imgHeight, 8);
+        ctx.clip();
+        
+        // 绘制图片（居中裁剪）
+        const imgRatio = img.width / img.height;
+        const containerRatio = imgWidth / imgHeight;
+        
+        let drawWidth, drawHeight, drawX, drawY;
+        
+        if (imgRatio > containerRatio) {
+          // 图片更宽，按高度填充
+          drawHeight = imgHeight;
+          drawWidth = imgHeight * imgRatio;
+          drawX = imgX - (drawWidth - imgWidth) / 2;
+          drawY = imgY;
+        } else {
+          // 图片更高，按宽度填充
+          drawWidth = imgWidth;
+          drawHeight = imgWidth / imgRatio;
+          drawX = imgX;
+          drawY = imgY - (drawHeight - imgHeight) / 2;
+        }
+        
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        ctx.restore();
+        
+      } catch (error) {
+        console.warn('主图片绘制失败:', error);
+        // 绘制错误占位图
+        ctx.fillStyle = '#F5F5F5';
+        this.drawRoundedRect(ctx, 20, 20, width - 40, 200, 8);
+        ctx.fill();
+        
+        ctx.fillStyle = '#FF4444';
+        ctx.font = '14px PingFang SC, Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('图片加载失败', width / 2, 120);
+      }
+    },
+
+    // 绘制价格
+    drawPrice(ctx, width, height) {
+      const price = this.info.Price || '0';
+      const priceY = 240;
+      
+      ctx.fillStyle = '#E64340';
+      ctx.font = 'bold 16px PingFang SC, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('约', width / 2 - 40, priceY);
+      
+      ctx.font = 'bold 24px PingFang SC, Arial, sans-serif';
+      ctx.fillText(price, width / 2, priceY);
+      
+      ctx.font = 'bold 16px PingFang SC, Arial, sans-serif';
+      ctx.fillText('元/㎡', width / 2 + 40, priceY);
+    },
+
+    // 绘制项目名称
+    drawProjectName(ctx, width, height) {
+      const projectName = this.info.ProjectName || '项目名称';
+      const nameY = 270;
+      
+      ctx.fillStyle = '#333333';
+      ctx.font = 'bold 18px PingFang SC, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(projectName, width / 2, nameY);
+    },
+
+    // 绘制标签
+    drawTags(ctx, width, height) {
+      const tagY = 300;
+      let currentX = 20;
+      
+      // 绘制预售许可证标签
+      if (this.info.PreSalePermit) {
+        ctx.fillStyle = '#F3EDE2';
+        ctx.font = '12px PingFang SC, Arial, sans-serif';
+        const tagText = this.info.PreSalePermit;
+        const tagWidth = ctx.measureText(tagText).width + 16;
+        
+        this.drawRoundedRect(ctx, currentX, tagY - 12, tagWidth, 24, 12);
+        ctx.fill();
+        
+        ctx.fillStyle = '#95886F';
+        ctx.textAlign = 'left';
+        ctx.fillText(tagText, currentX + 8, tagY);
+        
+        currentX += tagWidth + 10;
+      }
+      
+      // 绘制其他标签
+      if (this.info.Tags && this.info.Tags.length > 0) {
+        ctx.fillStyle = '#95886F';
+        ctx.font = '12px PingFang SC, Arial, sans-serif';
+        ctx.textAlign = 'left';
+        
+        const tagsText = this.info.Tags.join(' / ');
+        ctx.fillText(tagsText, currentX, tagY);
+      }
+    },
+
+    // 绘制基本信息区域
+    drawInfoSection(ctx, width, height) {
+      const infoY = 340;
+      const infoHeight = 80;
+      const itemWidth = (width - 40) / 3;
+      
+      // 绘制分割线
+      ctx.beginPath();
+      ctx.moveTo(20, infoY);
+      ctx.lineTo(width - 20, infoY);
+      ctx.strokeStyle = '#F0F0F0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      // 绘制三个信息项
+      const items = [
+        { label: this.info.BuildingCategory || '--', value: '类型' },
+        { label: this.info.AreaSegment || '--', value: '面积段' },
+        { label: this.info.FloorHeight || '--', value: '层高' }
+      ];
+      
+      items.forEach((item, index) => {
+        const centerX = 20 + (index + 0.5) * itemWidth;
+        
+        // 绘制标签
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 16px PingFang SC, Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(item.label, centerX, infoY + 30);
+        
+        // 绘制描述
+        ctx.fillStyle = '#999999';
+        ctx.font = '12px PingFang SC, Arial, sans-serif';
+        ctx.fillText(item.value, centerX, infoY + 50);
+      });
+      
+      // 绘制底部线
+      ctx.beginPath();
+      ctx.moveTo(20, infoY + infoHeight);
+      ctx.lineTo(width - 20, infoY + infoHeight);
+      ctx.strokeStyle = '#F0F0F0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    },
+
+    // 绘制底部区域（Logo和二维码）
+    drawBottomSection(ctx, width, height) {
+      const bottomY = height - 120;
+      
+      // 绘制Logo
+      if (this.logoDataUrl) {
+        const logoImg = new Image();
+        logoImg.src = this.logoDataUrl;
+        
+        const logoWidth = 110;
+        const logoHeight = 40;
+        const logoX = 20;
+        const logoY = bottomY + 20;
+        
+        ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
+      }
+      
+      // 绘制二维码区域
+      const qrX = width - 100;
+      const qrY = bottomY;
+      const qrSize = 80;
+      
+      // 绘制二维码
+      if (this.qrCodeDataUrl) {
+        const qrImg = new Image();
+        qrImg.src = this.qrCodeDataUrl;
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+      }
+      
+      // 绘制二维码提示文字
+      ctx.fillStyle = '#999999';
+      ctx.font = '12px PingFang SC, Arial, sans-serif';
+      ctx.textAlign = 'right';
+      this.drawText(ctx, '长按识别二维码', qrX - 10, qrY + qrSize + 20, 80);
+    },
+
+    // 保存Canvas图片
+    async saveCanvasImage(canvas) {
+      return new Promise((resolve, reject) => {
+        // 转换为Blob
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('生成图片失败'));
+            return;
+          }
+          
+          const dataUrl = URL.createObjectURL(blob);
           const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
           if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
-            // 微信浏览器使用JSSDK保存到相册
+            // 微信环境
             window.wx.saveImageToPhotosAlbum({
               filePath: dataUrl,
               success: () => {
-                this.$toast.success({
-                  message: '图片已保存到相册',
-                  duration: 1500,
-                  onClose: () => this.visible = false
-                });
+                URL.revokeObjectURL(dataUrl);
+                resolve();
               },
-              fail: () => {
-                this.$toast.fail('保存失败');
-                this.visible = false;
+              fail: (error) => {
+                URL.revokeObjectURL(dataUrl);
+                reject(new Error('微信保存失败'));
               }
             });
           } else {
-            // 其他浏览器直接下载
+            // 其他浏览器
             const link = document.createElement('a');
             link.href = dataUrl;
-            link.download = `项目详情_${new Date().getTime()}.png`;
+            link.download = `项目详情_${this.info.ProjectName || '海报'}_${new Date().getTime()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             
-            this.$toast.success({
-              message: '图片已下载',
-              duration: 1500,
-              onClose: () => this.visible = false
-            });
+            // 延迟清理
+            setTimeout(() => {
+              URL.revokeObjectURL(dataUrl);
+            }, 1000);
+            
+            resolve();
           }
-        }).catch(() => {
-          this.$toast.fail('保存失败');
-        });
-      }).catch(() => {
-        this.$toast.fail('保存失败');
+        }, 'image/png', 1.0);
       });
     },
     
@@ -270,24 +669,6 @@ export default {
   justify-content: center;
   align-items: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-
-
-/* 项目标题 */
-.poster-title {
-  font-size: 20px;
-  font-weight: bold;
-  color: #B6A37E;
-  margin-bottom: 5px;
-  text-align: center;
-}
-
-.poster-subtitle {
-  font-size: 12px;
-  color: #999;
-  margin-bottom: 15px;
-  text-align: center;
 }
 
 /* 项目图片容器 */
@@ -375,7 +756,6 @@ export default {
 
 .project-tags .tag-slash {
   font-size: 12px;
-
   color: #95886F;
   margin: 0 4px;
 }
@@ -468,5 +848,9 @@ export default {
 
 .save-button :deep(.van-button--primary::after) {
   border: none;
+}
+
+.save-button :deep(.van-button--loading) {
+  opacity: 0.8;
 }
 </style>
