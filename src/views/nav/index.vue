@@ -24,6 +24,15 @@
         </div>
       </div>
     </div>
+    
+    <!-- 导航选择菜单 -->
+    <van-action-sheet
+      v-model="showNavigationSheet"
+      :actions="navigationActions"
+      @select="onNavigationSelect"
+      cancel-text="取消"
+      title="选择导航应用"
+    />
   </div>
 </template>
 
@@ -38,7 +47,10 @@ export default {
       projectMarkers: null, // 项目标记实例
       mapData: [],
       userLocation: null, // 用户当前位置
-      selectedPoint: null // 选中的点位数据
+      selectedPoint: null, // 选中的点位数据
+      // 导航相关数据
+      showNavigationSheet: false, // 导航选择菜单是否显示
+      navigationActions: [] // 导航选项
     }
   },
   mounted() {
@@ -126,7 +138,7 @@ export default {
       try {
         // 创建地图实例
         this.map = new window.TMap.Map(document.getElementById('tencent-map'), {
-          center: new window.TMap.LatLng(39.915, 116.404), // 默认北京
+          center: new window.TMap.LatLng(31.5593, 120.2975), // 默认无锡
           zoom: 15
         });
         
@@ -184,7 +196,7 @@ export default {
                 'x': 22.5,
                 'y': 60
               },
-              'src': require('@/assets/img/address-icon.png') // 本地标记图标
+              'src': require('@/assets/img/position.png') // 本地标记图标
             })
           },
           geometries: markerData
@@ -231,11 +243,100 @@ export default {
       }
     },
     
-    // 点击点位信息跳转详情页
+    // 点击点位信息唤起导航选择菜单
     handlePointClick(point) {
-      if (point && point.id) {
-        this.$router.push(`/detail/${point.id}`);
+      if (!point) return;
+      
+      // 保存当前选中的点位
+      this.selectedPoint = point;
+      
+      // 默认显示百度地图、高德地图和腾讯地图
+      const actions = [
+        { name: '百度地图', action: 'baidu' },
+        { name: '高德地图', action: 'amap' },
+        { name: '腾讯地图', action: 'tencent' }
+      ];
+      
+      // 更新导航选项
+      this.navigationActions = actions;
+      
+      // 显示导航选择菜单
+      this.showNavigationSheet = true;
+    },
+    
+    // 处理导航选择
+    onNavigationSelect(action) {
+      if (!this.selectedPoint) return;
+      
+      // 项目地址（使用点位名称作为地址）
+      const address = this.selectedPoint.name;
+      // 地址编码，确保可以被导航app识别
+      const encodedAddress = encodeURIComponent(address);
+      
+      // 获取经纬度
+      const lat = this.selectedPoint.lat || '';
+      const lng = this.selectedPoint.lng || '';
+      const latLng = `${lat},${lng}`;
+      
+      // 获取设备类型
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      
+      // 导航app URL Scheme优化，针对微信浏览器和高德地图做特殊处理
+      let appUrl = '';
+      let downloadUrl = '';
+      
+      const selectedApp = action.action;
+      
+      // 高德地图特殊处理，使用更可靠的URL Scheme格式
+      if (selectedApp === 'amap') {
+        // 高德地图使用新的URL Scheme格式，确保在微信浏览器中也能尝试直接打开
+        if (isIOS) {
+          // iOS系统使用更可靠的高德URL Scheme
+          appUrl = `iosamap://path?sourceApplication=applicationName&backScheme=applicationScheme&dlat=${lat}&dlon=${lng}&dname=${encodedAddress}&dev=0&t=0`;
+        } else {
+          // Android系统使用高德URL Scheme
+          appUrl = `androidamap://viewMap?sourceApplication=applicationName&poiname=${encodedAddress}&lat=${lat}&lon=${lng}&dev=0`;
+        }
+        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id461703208' : 'https://a.amap.com/';
+      } 
+      // 百度地图URL Scheme
+      else if (selectedApp === 'baidu') {
+        if (isIOS) {
+          // iOS系统使用百度URL Scheme
+          appUrl = `baidumap://map/direction?origin={{我的位置}}&destination=name:${encodedAddress}|latlng:${latLng}&mode=driving&coord_type=bd09ll`;
+        } else {
+          // Android系统使用百度URL Scheme
+          appUrl = `bdapp://map/direction?origin={{我的位置}}&destination=name:${encodedAddress}|latlng:${latLng}&mode=driving&coord_type=bd09ll`;
+        }
+        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id452186370' : 'https://map.baidu.com/zt/client/index/';
+      } 
+      // 腾讯地图URL Scheme
+      else if (selectedApp === 'tencent') {
+        if (isIOS) {
+          // iOS系统使用腾讯URL Scheme
+          appUrl = `qqmap://map/routeplan?from=我的位置&type=drive&to=${encodedAddress}&tocoord=${latLng}&policy=0&referer=OB4BZ-D4W3U-B7VVO-4PJWW-6TKDJ-WPB77`;
+        } else {
+          // Android系统使用腾讯URL Scheme
+          appUrl = `qqmap://map/routeplan?type=drive&from=我的位置&fromcoord=CurrentLocation&to=${encodedAddress}&tocoord=${latLng}&policy=0&referer=OB4BZ-D4W3U-B7VVO-4PJWW-6TKDJ-WPB77`;
+        }
+        downloadUrl = isIOS ? 'https://apps.apple.com/cn/app/id481623192' : 'https://map.qq.com/mobile/guidedownload/';
       }
+      
+      // 尝试打开导航app
+      const openApp = () => {
+        window.location.href = appUrl;
+        
+        // 设置定时器，500ms后检查是否成功打开app，如果没有则跳转到下载页面
+        setTimeout(() => {
+          window.location.href = downloadUrl;
+        }, 500);
+      };
+      
+      // 执行打开app操作
+      openApp();
+      
+      // 关闭导航选择菜单
+      this.showNavigationSheet = false;
     },
     
     // 找到离用户最近的标记点并定位
@@ -373,10 +474,18 @@ export default {
             
             console.error(errorMsg);
             
-            // 定位失败时，使用默认位置
-            const defaultPoint = new window.TMap.LatLng(39.915, 116.404);
+            // 定位失败时，使用默认位置（无锡市）
+            const defaultPoint = new window.TMap.LatLng(31.5593, 120.2975);
             this.map.setCenter(defaultPoint);
-            this.map.setZoom(15);
+            this.map.setZoom(12);
+            
+            // 存储默认位置（无锡）
+            this.userLocation = defaultPoint;
+            
+            // 如果已经有地图标记，找到最近的标记点
+            if (this.projectMarkers) {
+              this.findNearestMarker();
+            }
           }, {
             enableHighAccuracy: true, // 启用高精度定位
             timeout: 10000, // 超时时间10秒
@@ -384,17 +493,33 @@ export default {
           });
         } else {
           console.error('浏览器不支持地理定位');
-          // 浏览器不支持定位时，使用默认位置
-          const defaultPoint = new window.TMap.LatLng(39.915, 116.404);
+          // 浏览器不支持定位时，使用默认位置（无锡市）
+          const defaultPoint = new window.TMap.LatLng(31.5593, 120.2975);
           this.map.setCenter(defaultPoint);
-          this.map.setZoom(15);
+          this.map.setZoom(12);
+          
+          // 存储默认位置（无锡）
+          this.userLocation = defaultPoint;
+          
+          // 如果已经有地图标记，找到最近的标记点
+          if (this.projectMarkers) {
+            this.findNearestMarker();
+          }
         }
       } catch (error) {
         console.error('定位函数执行失败:', error);
-        // 定位失败时，使用默认位置
-        const defaultPoint = new window.TMap.LatLng(39.915, 116.404);
+        // 定位失败时，使用默认位置（无锡市）
+        const defaultPoint = new window.TMap.LatLng(31.5593, 120.2975);
         this.map.setCenter(defaultPoint);
-        this.map.setZoom(15);
+        this.map.setZoom(12);
+        
+        // 存储默认位置（无锡）
+        this.userLocation = defaultPoint;
+        
+        // 如果已经有地图标记，找到最近的标记点
+        if (this.projectMarkers) {
+          this.findNearestMarker();
+        }
       }
     }
   }
