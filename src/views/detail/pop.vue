@@ -17,7 +17,8 @@
         
         <!-- 项目图片 -->
         <div class="poster-img-wrapper">
-          <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" />
+           <!-- <img :src="info.ImagesList && info.ImagesList.length > 0 ? info.ImagesList[0] : ''" alt="项目图片" class="poster-img" /> -->
+          <img src="@/assets/img/poster.png" alt="项目图片" class="poster-img" />
         </div>
         
         <!-- 价格信息 -->
@@ -169,22 +170,30 @@ export default {
 
       // 使用html2canvas保存图片，解决跨域问题
       import('html2canvas').then((html2canvas) => {
-        // 先处理所有图片，确保跨域属性设置正确
-        const images = posterContainer.querySelectorAll('img');
-        images.forEach(img => {
-          img.crossOrigin = 'anonymous';
-        });
-        
-        // 使用html2canvas的toPng方法，启用CORS支持
-        html2canvas.default(posterContainer, {
-          scale: 2,
+        // 优化：降低生成图片的分辨率，加快生成速度
+        const options = {
+          scale: 1, // 降低缩放比例，加快生成速度
           backgroundColor: '#ffffff',
           useCORS: true,
-          allowTaint: true
-        }).then((canvas) => {
+          allowTaint: true,
+          logging: false,
+          timeout: 5000 // 设置合理的超时时间
+        };
+
+        // 微信浏览器特殊处理：优化生成参数
+        const isWechat = /MicroMessenger/i.test(navigator.userAgent);
+        if (isWechat) {
+          // 微信浏览器：进一步降低分辨率，加快生成速度
+          options.scale = 1;
+          // 使用更快的渲染模式
+          options.useCORS = false;
+          options.allowTaint = true;
+        }
+        
+        // 使用html2canvas的toPng方法
+        html2canvas.default(posterContainer, options).then((canvas) => {
           // 将canvas转换为dataURL
           const dataUrl = canvas.toDataURL('image/png');
-          const isWechat = /MicroMessenger/i.test(navigator.userAgent);
           
           if (isWechat && window.wx && window.wx.saveImageToPhotosAlbum) {
             // 微信浏览器使用JSSDK保存到相册
@@ -197,8 +206,9 @@ export default {
                   onClose: () => this.visible = false
                 });
               },
-              fail: () => {
-                this.$toast.fail('保存失败');
+              fail: (err) => {
+                console.error('微信保存图片失败:', err);
+                this.$toast.fail('保存失败，请重试');
                 this.visible = false;
               }
             });
